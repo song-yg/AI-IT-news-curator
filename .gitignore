@@ -1,0 +1,11 @@
+# 로컬 전용 - 절대 커밋 금지 (API 키 포함)
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store

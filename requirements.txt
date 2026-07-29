@@ -1,0 +1,9 @@
+# AI-IT 뉴스 파이프라인 의존성
+# main.py 실행
+
+requests
+python-dotenv
+beautifulsoup4
+gdeltdoc
+sentence-transformers
+trafilatura
