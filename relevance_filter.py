@@ -43,9 +43,6 @@ import requests
 # ---------------------------------------------------------------------------
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER") or "anthropic"
 
-LLM_MODEL_ANTHROPIC = "claude-haiku-4-5-20251001"
-LLM_API_URL_ANTHROPIC = "https://api.anthropic.com/v1/messages"
-
 LLM_MODEL_OPENROUTER = os.environ.get("OPENROUTER_MODEL") or "openrouter/free"
 LLM_API_URL_OPENROUTER = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -80,9 +77,8 @@ _LLM_MODEL_ROLE_ERROR_CODE = {
 # 하위호환용 - 모델명만 뽑은 리스트(다른 곳에서 " -> ".join(...) 등으로 사용)
 LLM_MODEL_CHAIN_OPENROUTER = [m for _, m in _LLM_MODEL_CHAIN_OPENROUTER_ROLES]
 
-# OpenRouter 권장 헤더(선택, ASCII 전용 - 한글 넣으면 UnicodeEncodeError남,
-# issue_grouper.py에서 이미 실측 확인된 함정).
-_OPENROUTER_X_TITLE = "feed-livestock-news-relevance-filter"
+# OpenRouter 권장 헤더(선택, ASCII 전용 - 한글 넣으면 UnicodeEncodeError남, issue_grouper.py에서 이미 실측 확인된 함정).
+_OPENROUTER_X_TITLE = "AI-IT-news-relevance-filter"
 
 # 한 번의 API 호출에 몇 건까지 같이 물어볼지. issue_grouper의 LLM_BATCH_SIZE(20,
 # 페어 단위)와 맞춤. 무료 라우터가 배치가 클 때 개수를 자주 못 맞추는
@@ -103,57 +99,56 @@ _SYSTEM_PROMPT = (
     # 대상(기사 제목) 자체도 다국어라 지시문을 영어로 통일하는 게 더
     # 자연스럽다는 판단. 요약 생성 프롬프트(llm_summarizer.py)는 결과물이
     # 한국어여야 하므로 한국어로 유지.
-    "You are a relevance classifier for a feed and livestock industry news "
-    "curation system. For each article, decide whether it substantively "
-    "covers the \"feed industry\" or \"livestock industry\" (animal "
-    "husbandry, disease control, distribution, policy, etc.) as its actual "
+    "You are a relevance classifier for an AI/IT industry news curation "
+    "system. For each article, decide whether it substantively covers the "
+    "\"AI industry\" or \"IT industry\" (artificial intelligence, specific "
+    "AI/tech companies, robotics, or other IT technologies) as its actual "
     "topic.\n\n"
     "RELEVANT (true):\n"
-    "- Articles whose core topic is livestock (cattle/pigs/chickens/ducks "
-    "etc.) rearing, disease, disease control, livestock product "
-    "(meat/eggs/milk etc.) production, pricing, trade, or livestock-related "
-    "government policy/legislation\n"
-    "- Articles whose core topic is feed ingredients (grains such as corn, "
-    "soybean meal, wheat; international grain market conditions), feed "
-    "additives (amino acids, probiotics, enzymes, antibiotic alternatives, "
-    "etc.), or feed manufacturing/distribution (feed mills, premixes, "
-    "compound feed, TMR, etc.)\n\n"
+    "- Articles whose core topic is artificial intelligence: models/"
+    "services (LLMs, generative AI, chatbots, machine learning, deep "
+    "learning, AI chips/hardware), AI-related corporate moves (funding, "
+    "product launches, partnerships, regulation, earnings) for companies "
+    "such as Nvidia, or AI policy/legislation\n"
+    "- Articles whose core topic is robotics (autonomous driving, robots, "
+    "drones) or other IT technologies covered by this project (metaverse, "
+    "VR/AR, blockchain, NFT, cloud computing, cybersecurity, quantum "
+    "computing)\n\n"
     "NOT RELEVANT (false) - the following are mismatch patterns that have "
     "actually been confirmed to repeat, so filter them out with particular "
     "care:\n"
     "1. Homonyms: the search term spells the same but refers to something "
-    "different (e.g. a disease name that is actually a person's name/"
-    "nickname, or \"feed\" referring to the pet food industry - pet food is "
-    "out of scope for this project)\n"
+    "different (e.g. \"클라우드\"/\"cloud\" as a person's name or fictional "
+    "character, \"메타버스\" as an unrelated brand/nickname, or \"AI\" used "
+    "as an abbreviation unrelated to artificial intelligence)\n"
     "2. Appears only as part of a proper noun: the search term is merely "
-    "part of an institution name, bill name, etc. (e.g. embedded in the "
-    "name of a National Assembly standing committee - the article's actual "
-    "subject is unrelated political news)\n"
+    "part of an event name, sponsorship name, product line name, etc. "
+    "(e.g. \"Nvidia Cup\" esports tournament results, where the article's "
+    "actual subject is the match outcome, not Nvidia or AI)\n"
     "3. Footnote-level mention: the article's core topic is something else "
-    "entirely (e.g. semiconductor exports, overall price index), and "
-    "livestock-related content appears only briefly as one line among many "
-    "statistics/items\n"
-    "4. Grain not used for feed: articles about corn, wheat, soybeans, etc. "
-    "where the grain is not for feed but for food, bioenergy (ethanol), or "
-    "the general agricultural commodity market broadly, with no mention of "
-    "feed or livestock at all (e.g. a corn price article that only "
-    "discusses food-ingredient supply like popcorn/cereal or ethanol "
-    "feedstock)\n\n"
+    "entirely (e.g. a general stock market wrap-up, an overall corporate "
+    "earnings roundup), and AI/IT-related content appears only briefly as "
+    "one line among many companies/items\n"
+    "4. Generic/marketing buzzword with no real substance: the article "
+    "merely slaps on \"AI\" or \"스마트\" as a marketing adjective for an "
+    "otherwise unrelated product (e.g. a home appliance review that "
+    "mentions \"AI 기능 탑재\" only in passing, with no real discussion of "
+    "the AI technology itself)\n\n"
     "Examples that MUST be kept as relevant (true) - these types have "
     "actually been mistakenly filtered out before, so pay special "
     "attention:\n"
-    "- Articles about consumer prices/supply of livestock products "
-    "(eggs/meat/milk etc.) are relevant even if the title doesn't contain "
-    "words like \"livestock\" or \"animal husbandry\". This is true even "
-    "for titles with a light tone using slang or buzzwords. For example, "
-    "an article discussing the cause of an egg price surge using the "
-    "buzzword \"rocket eggs\" is an article about egg (a livestock product) "
-    "prices, so it is true - do not judge it false just because the tone "
-    "is light or the word \"livestock\" doesn't appear.\n"
+    "- Articles about AI/IT company stock moves, earnings, or product news "
+    "are relevant even if the title doesn't contain words like "
+    "\"인공지능\" or \"IT\". This is true even for titles with a light tone "
+    "using slang or buzzwords. For example, an article discussing Nvidia's "
+    "stock surge using a slang nickname for the stock is an article about "
+    "an AI-industry company, so it is true - do not judge it false just "
+    "because the tone is light or the word \"인공지능\" doesn't appear.\n"
     "- Before marking such an article false, first confirm it doesn't "
     "actually match any of NOT RELEVANT criteria 1-4 (homonym / part of "
-    "proper noun / footnote mention / grain not for feed) - if it clearly "
-    "doesn't match any of them, it is automatically relevant.\n\n"
+    "proper noun / footnote mention / generic buzzword with no substance) "
+    "- if it clearly doesn't match any of them, it is automatically "
+    "relevant.\n\n"
     "The \"category\" value provided alongside each article is just a "
     "reference hint from automatic dictionary-keyword matching, not a "
     "confirmed answer - make your final judgment based on the actual "
@@ -167,7 +162,6 @@ _SYSTEM_PROMPT = (
     "be in the form {\"id\": number, \"relevant\": true|false}, and id must "
     "exactly match the number of the input article."
 )
-
 
 def _snippet(article: dict) -> str | None:
     """
@@ -238,28 +232,6 @@ def _request_openrouter(system_prompt: str, user_prompt: str, api_key: str,
     data = resp.json()
     return data["choices"][0]["message"]["content"].strip()
 
-
-def _request_anthropic(system_prompt: str, user_prompt: str, api_key: str, session: requests.Session) -> str:
-    headers = {
-        "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-    }
-    body = {
-        "model": LLM_MODEL_ANTHROPIC,
-        "max_tokens": 1024,
-        "temperature": 0,
-        "system": system_prompt,
-        "messages": [{"role": "user", "content": user_prompt}],
-    }
-    resp = session.post(LLM_API_URL_ANTHROPIC, headers=headers, json=body, timeout=30)
-    resp.raise_for_status()
-    data = resp.json()
-    return "".join(
-        block.get("text", "") for block in data.get("content", []) if block.get("type") == "text"
-    ).strip()
-
-
 def _request_llm_text(system_prompt: str, user_prompt: str, api_key: str, session: requests.Session,
                        label: str, validate=None):
     """
@@ -290,9 +262,6 @@ def _request_llm_text(system_prompt: str, user_prompt: str, api_key: str, sessio
     시도라는 뜻 - 호출부가 여기서도 실패 시 예외를 던질지, 부분 복구로
     관대하게 처리할지 판단하는 데 씀.
     """
-    if LLM_PROVIDER != "openrouter":
-        text = _request_anthropic(system_prompt, user_prompt, api_key, session)
-        return validate(text, True) if validate else text
 
     chain = _LLM_MODEL_CHAIN_OPENROUTER_ROLES
     last_error: Exception | None = None
@@ -426,7 +395,7 @@ def filter_articles(articles: list[dict]) -> list[dict]:
               f"관련성 필터 생략, {len(llm_target_articles)}건(네이버/GDELT) 전부 통과")
         return articles
 
-    model_desc = " -> ".join(LLM_MODEL_CHAIN_OPENROUTER) if LLM_PROVIDER == "openrouter" else LLM_MODEL_ANTHROPIC
+    model_desc = " -> ".join(LLM_MODEL_CHAIN_OPENROUTER) if LLM_PROVIDER == "openrouter" else "Anthropic Claude"
     print(f"[relevance_filter] 관련성 필터 시작 - provider={LLM_PROVIDER}, "
           f"model={model_desc}, 대상 {len(llm_target_articles)}건(네이버/GDELT만, "
           f"WATT {len(watt_articles)}건 제외)")
@@ -608,7 +577,7 @@ def recategorize_uncategorized(articles: list[dict]) -> list[dict]:
     category_list_text = "\n".join(f"- {c}" for c in category_choices)
     system_prompt = CATEGORY_RECLASSIFY_SYSTEM_PROMPT_TEMPLATE.format(category_list=category_list_text)
 
-    model_desc = " -> ".join(LLM_MODEL_CHAIN_OPENROUTER) if LLM_PROVIDER == "openrouter" else LLM_MODEL_ANTHROPIC
+    model_desc = " -> ".join(LLM_MODEL_CHAIN_OPENROUTER) if LLM_PROVIDER == "openrouter" else "Anthropic Claude"
     print(f"[relevance_filter] 카테고리 재분류 시작 - provider={LLM_PROVIDER}, "
           f"model={model_desc}, 대상 {len(targets)}건('기타'로 남았지만 관련성 확인된 기사)")
 

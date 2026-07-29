@@ -187,15 +187,13 @@ def _is_korean_title(title: str, threshold: float = 0.2) -> bool:
 
 def _is_korean_gdelt_article(article: dict) -> bool:
     """
-    GDELT 소스 기사가 실제로 한국어(국내) 기사인지 판단한다. GDELT 응답에
-    "language": "Korean" 같은 필드가 자체적으로 붙어 있으면 그 값을 우선
-    쓴다 - GDELT가 크롤링 시점에 이미 판별해둔 원본 신호라, 제목 글자를
-    세어 다시 추측하는 것보다 신뢰도가 높다. 이 필드가 비어있는 경우에만
-    _is_korean_title()(제목의 한글 유니코드 비율)로 안전하게 fallback한다.
+    GDELT 소스 기사가 실제로 한국어(국내) 기사인지 판단한다.
+    GDELT 응답에 "language": "Korean" 같은 필드가 자체적으로 붙어 있으면 그 값을 우선 쓴다.
+     - GDELT가 크롤링 시점에 이미 판별해둔 원본 신호라, 제목 글자를 세어 다시 추측하는 것보다 신뢰도가 높다.
+       이 필드가 비어있는 경우에만 _is_korean_title()(제목의 한글 유니코드 비율)로 안전하게 fallback한다.
 
-    main.py의 score()와 scorer.split_domestic_international() 둘 다 이
-    함수 하나만 공유해서 쓴다 - 국내/해외 판별 기준이 Top N 스코어링과
-    카테고리 집계 사이에서 서로 어긋나지 않도록 단일 소스로 통일.
+    main.py의 score()와 scorer.split_domestic_international() 둘 다 이 함수 하나만 공유해서 쓴다.
+     - 국내/해외 판별 기준이 Top N 스코어링과 카테고리 집계 사이에서 서로 어긋나지 않도록 단일 소스로 통일.
     """
     language = article.get("language")
     if language:
@@ -207,14 +205,9 @@ def split_domestic_international(articles: list[dict]) -> tuple[list[dict], list
     """
     국내/해외 개별 집계 축 분리. 네이버 = 국내, WATT/GDELT = 해외.
 
-    GDELT로 수집됐지만 실제로는 한국어(국내) 기사인 경우 "해외"가 아니라
-    "국내"로 재분류한다(`_is_korean_gdelt_article` 참고 - GDELT의 language
-    필드를 우선 쓰고 없을 때만 글자 비율 추정으로 fallback). WATT는 원래
-    영어권 업계지라 이 문제가 없어 GDELT 소스에만 적용.
+    GDELT로 수집됐지만 실제로는 한국어(국내) 기사인 경우 "해외"가 아니라 "국내"로 재분류한다(`_is_korean_gdelt_article` 참고 - GDELT의 language 필드를 우선 쓰고 없을 때만 글자 비율 추정으로 fallback).
 
-    main.py의 score()와 이 함수(category_aggregator.py의 카테고리 집계가
-    사용)가 같은 `_is_korean_gdelt_article`을 공유하므로, Top N 스코어링과
-    카테고리 집계가 국내/해외를 서로 다른 기준으로 나누는 불일치는 없다.
+    main.py의 score()와 이 함수(category_aggregator.py의 카테고리 집계가 사용)가 같은 `_is_korean_gdelt_article`을 공유하므로, Top N 스코어링과 카테고리 집계가 국내/해외를 서로 다른 기준으로 나누는 불일치는 없다.
     """
     domestic = []
     international = []
@@ -245,18 +238,14 @@ def _majority_category(group: list[dict]) -> str:
 def score_by_category(groups: list[list[dict]], top_n: int,
                        exclude: tuple[str, ...] = ("기타",)) -> dict[str, list[dict]]:
     """
-    카테고리별 Top N - 국내/해외 축과 독립적으로 카테고리 축도 만들되,
-    국내/해외 구분은 유지한다. 즉 이 함수는 domestic_groups/international_
-    groups 중 하나를 받아서 그 축 "안에서" 카테고리별로 나눈다(호출부인
-    main.py가 국내용/해외용으로 각각 한 번씩 불러써야 함).
+    카테고리별 Top N - 국내/해외 축과 독립적으로 카테고리 축도 만들되, 국내/해외 구분은 유지한다.
+    즉 이 함수는 domestic_groups/international_ groups 중 하나를 받아서 그 축 "안에서" 카테고리별로 나눈다(호출부인 main.py가 국내용/해외용으로 각각 한 번씩 불러써야 함).
 
-    "기타"는 기본적으로 제외한다 - 카테고리별 Top N의 목적(질병명/무역·관세
-    처럼 명확한 주제별로 뭐가 중요한지 보기)과 "카테고리 안 걸린 잡다한 것들
+    "기타"는 기본적으로 제외한다 - 카테고리별 Top N의 목적(질병명/무역·관세처럼 명확한 주제별로 뭐가 중요한지 보기)과 "카테고리 안 걸린 잡다한 것들
     중 언급 많은 것"은 성격이 다르기 때문.
 
-    이슈가 없는 카테고리는 결과 dict에 아예 키로 안 남는다(빈 리스트를
-    안 만듦) - 호출부에서 "이 카테고리는 이번 주 이슈 없음"과 "이 카테고리
-    자체가 없음"을 구분할 필요가 없게 하기 위함.
+    이슈가 없는 카테고리는 결과 dict에 아예 키로 안 남는다(빈 리스트를 안 만듦)
+     - 호출부에서 "이 카테고리는 이번 주 이슈 없음"과 "이 카테고리 자체가 없음"을 구분할 필요가 없게 하기 위함.
     """
     by_category: dict[str, list[list[dict]]] = defaultdict(list)
     for group in groups:
@@ -269,10 +258,8 @@ def score_by_category(groups: list[list[dict]], top_n: int,
     for category, cat_groups in by_category.items():
         ranked = score_and_rank(cat_groups, top_n=top_n)
         if ranked:
-            # 이후 단계(LLM 요약, storage 저장)에서 여러 카테고리 결과를
-            # 하나의 평평한 리스트로 합쳐 처리할 일이 있는데, 그때도 "이
-            # 항목이 원래 어느 카테고리였는지" 추적할 수 있도록 항목
-            # 자체에 category를 남겨둔다.
+            # 이후 단계(LLM 요약, storage 저장)에서 여러 카테고리 결과를 하나의 평평한 리스트로 합쳐 처리할 일이 있는데,
+            # 그때도 "이 항목이 원래 어느 카테고리였는지" 추적할 수 있도록 항목 자체에 category를 남겨둔다.
             for item in ranked:
                 item["category"] = category
             result[category] = ranked
@@ -306,24 +293,3 @@ def print_top_n(label: str, ranked: list[dict], n: int = 5) -> None:
             print(f"   (그룹 내 추가 {len(item['titles']) - 1}건 생략)")
         if item.get("cross_axis_partner"):
             print(f"   🔗 반대 축에서도 다뤄짐: {item['cross_axis_partner']}")
-
-
-if __name__ == "__main__":
-    # 자체 점검용 - 그룹핑 없이 recency_weight/score_group만 확인
-    from datetime import timedelta
-
-    now = datetime.now(timezone.utc)
-    sample_articles = [
-        {"title": "구제역 확산", "url": "https://a.com/1", "source": "네이버",
-         "press": "yna.co.kr", "published_at": now.isoformat()},
-        {"title": "구제역 추가 발생", "url": "https://a.com/2", "source": "네이버",
-         "press": "yna.co.kr", "published_at": (now - timedelta(days=1)).isoformat()},
-        {"title": "구제역 3주째", "url": "https://a.com/3", "source": "네이버",
-         "press": "chosun.com", "published_at": (now - timedelta(days=6)).isoformat()},
-    ]
-    group_result = score_group(sample_articles)
-    print(group_result)
-    assert group_result["mention_count"] == 3  # cap=3 안 넘었으니 dedup 없음
-
-    for d in (0, 2, 3, 5, 6, 7, 8, 30):
-        print(f"경과 {d}일 -> weight {recency_weight(d)}")

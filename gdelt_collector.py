@@ -1138,10 +1138,3 @@ def collect(keywords: list[str] | None = None) -> tuple[list[dict], dict]:
     _update_crowding_state_after_run()
 
     return all_articles, timeline_by_keyword
-
-if __name__ == "__main__":
-    # 터미널에서 python gdelt_collector.py 로 직접 실행했을 때만 동작.
-    articles, timeline = collect()
-    print(f"\n총 {len(articles)}건 기사 수집 완료")
-    for a in articles[:3]:
-        print(a)

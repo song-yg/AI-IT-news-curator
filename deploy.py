@@ -218,26 +218,3 @@ def send_weekly_email(week_label: str, domestic_summarized: list[dict], internat
                                       category_comparison)
     subject = f"[사료·축산뉴스] {week_label} 주간 큐레이션"
     return send_email(html_content, subject, recipients, smtp_user, smtp_app_password)
-
-
-if __name__ == "__main__":
-    # 자체 점검용 - 실제 SMTP 발송 없이 렌더링/안전 생략 경로만 확인.
-    sample_domestic = [{
-        "issue_score": 3.5, "mention_count": 2, "titles": ["구제역 확산", "구제역 추가 발생"],
-        "urls": ["https://a.com/1", "https://a.com/2"], "summary": "테스트 요약입니다.",
-    }]
-    sample_category = {"질병명": sample_domestic}
-
-    html_out = render_email_html("2026-30", sample_domestic, [], sample_category, {}, ["GDELT"])
-    assert "구제역 확산" in html_out
-    assert "테스트 요약입니다" in html_out
-    assert "[질병명]" in html_out
-    assert "GDELT" in html_out
-    print("[deploy] HTML 렌더링 자체 점검 통과")
-
-    # 인증정보 없을 때 안전하게 생략되는지 확인
-    for key in ("SMTP_USER", "SMTP_APP_PASSWORD", "EMAIL_RECIPIENTS"):
-        os.environ.pop(key, None)
-    result = send_weekly_email("2026-30", sample_domestic, [], sample_category, {}, [])
-    assert result is False
-    print("[deploy] 인증정보 없을 때 안전 생략 확인 - 통과")
