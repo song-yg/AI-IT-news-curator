@@ -1,16 +1,14 @@
 """
 deploy.py - 6단계 배포 레이어.
 
-Gmail SMTP로 이번 주 큐레이션 결과를 HTML 이메일로 발송한다. main.py의
-[6] 배포 단계에서 이 모듈의 send_weekly_email()을 호출한다.
+Gmail SMTP로 이번 주 큐레이션 결과를 HTML 이메일로 발송한다.
+main.py의 [6] 배포 단계에서 이 모듈의 send_weekly_email()을 호출한다.
 
 ** Gmail SMTP를 선택한 이유 **
-SendGrid/Mailgun 같은 무료 트랜잭션 이메일 API는 도메인 인증(SPF/DKIM)
-없이 기본 발신 주소로 보내면 스팸함으로 분류될 확률이 높음 - 이제 막 만든
-발신자라 평판이 전혀 없는 상태로 시작하기 때문. Gmail SMTP는 실제 Gmail
-계정에서 Gmail 서버를 통해 보내는 거라 SPF/DKIM이 자동으로 유효하고
-발신처 신뢰도도 이미 높아 이 문제가 훨씬 덜함 - 특히 지금처럼 수신자가
-소수일 때는 도메인 설정 같은 번거로운 과정 없이 바로 쓸 수 있는 쪽이 낫다.
+SendGrid/Mailgun 같은 무료 트랜잭션 이메일 API는 도메인 인증(SPF/DKIM)없이 기본 발신 주소로 보내면 스팸함으로 분류될 확률이 높음.
+ - 이제 막 만든 발신자라 평판이 전혀 없는 상태로 시작하기 때문.
+   Gmail SMTP는 실제 Gmail 계정에서 Gmail 서버를 통해 보내는 거라 SPF/DKIM이 자동으로 유효하고 발신처 신뢰도도 이미 높아 이 문제가 훨씬 덜함.
+   - 특히 지금처럼 수신자가 소수일 때는 도메인 설정 같은 번거로운 과정 없이 바로 쓸 수 있는 쪽이 낫다.
 
 ** 인증정보 관리 **
 GitHub Secrets(민감정보라 Variables 아님)에서 읽는다:
@@ -19,17 +17,12 @@ GitHub Secrets(민감정보라 Variables 아님)에서 읽는다:
   EMAIL_RECIPIENTS   수신자 이메일, 콤마로 구분
 
 ** 콘텐츠 구성 **
-storage.py가 이미 만들어둔 domestic_summarized/international_summarized/
-domestic_by_category/international_by_category(scored.json과 동일한
-데이터)를 그대로 받아서 summary.md와 같은 구조(요약 유무와 무관하게 원문
-링크는 항상 같이 노출)로 HTML을 렌더링한다. 이메일 클라이언트는 외부
-스타일시트를 지원 안 하는 경우가 많아 인라인 스타일만 사용.
+storage.py가 이미 만들어둔 domestic_summarized/international_summarized/domestic_by_category/international_by_category(scored.json과 동일한 데이터)를 그대로 받아서 summary.md와 같은 구조(요약 유무와 무관하게 원문 링크는 항상 같이 노출)로 HTML을 렌더링한다.
+이메일 클라이언트는 외부 스타일시트를 지원 안 하는 경우가 많아 인라인 스타일만 사용.
 
 ** 안전 실패 원칙 **
-storage.py와 같은 방향 - 이메일 발송이 실패해도(SMTP 인증 오류, 네트워크
-문제 등) 예외를 그대로 던지지 않고 로그만 남기고 조용히 실패한다. 이 시점엔
-이미 수집/스코어링/요약/저장이 다 끝난 뒤라, 배포 하나 실패했다고 전체
-실행을 죽이면 안 된다는 판단.
+storage.py와 같은 방향 - 이메일 발송이 실패해도(SMTP 인증 오류, 네트워크 문제 등) 예외를 그대로 던지지 않고 로그만 남기고 조용히 실패한다.
+이 시점엔 이미 수집/스코어링/요약/저장이 다 끝난 뒤라, 배포 하나 실패했다고 전체 실행을 죽이면 안 된다는 판단.
 """
 
 import html
@@ -51,9 +44,7 @@ def _format_issue_html(item: dict, rank: int | None = None) -> str:
     이슈 하나 분량의 HTML 블록. summary.md의 _format_issue_section과 같은 정보를 담는다.
 
     rank: 이 이슈가 속한 목록(전체 Top N 또는 카테고리별 Top N) 안에서 몇 번째인지.
-    None이면(순위 개념이 없는 호출부) 번호를 안 붙인다 - 호출부(_format_section_html/
-    _format_category_html)가 enumerate로 1부터 매겨서 넘겨준다. 지금까지 이메일에
-    순위 숫자가 아예 안 붙어있었던 걸 담당자가 지적해서 추가함(2026-07-28).
+    None이면(순위 개념이 없는 호출부) 번호를 안 붙인다 - 호출부(_format_section_html/_format_category_html)가 enumerate로 1부터 매겨서 넘겨준다.
     """
     titles = item.get("titles", [])
     rep_title = titles[0] if titles else "(제목 없음)"
@@ -148,9 +139,7 @@ def render_email_html(week_label: str, domestic_summarized: list[dict], internat
     scored.json과 동일한 데이터를 받아 이메일 본문(HTML 문자열)을 만든다.
     summary.md(storage.py)와 콘텐츠 구성은 같고 렌더링 형식만 HTML로 다르다.
 
-    category_comparison(지난주 대비 증감)이 있으면 제목 바로 아래에 추가 -
-    "이번 주 큰 흐름"을 이슈 목록보다 먼저 보여주는 구성(summary.md와
-    동일한 배치 원칙).
+    category_comparison(지난주 대비 증감)이 있으면 제목 바로 아래에 추가 - "이번 주 큰 흐름"을 이슈 목록보다 먼저 보여주는 구성(summary.md와 동일한 배치 원칙).
     """
     parts = [
         '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Arial, sans-serif; '
@@ -177,9 +166,9 @@ def render_email_html(week_label: str, domestic_summarized: list[dict], internat
 def send_email(html_content: str, subject: str, recipients: list[str],
                smtp_user: str, smtp_app_password: str) -> bool:
     """
-    Gmail SMTP(587, STARTTLS)로 HTML 이메일을 보낸다. 성공하면 True, 실패하면
-    (예외를 던지지 않고) False를 반환한다 - 호출부가 이 결과로 로그만 남기고
-    계속 진행할 수 있게.
+    Gmail SMTP(587, STARTTLS)로 HTML 이메일을 보낸다.
+    성공하면 True, 실패하면 (예외를 던지지 않고) False를 반환한다.
+     - 호출부가 이 결과로 로그만 남기고 계속 진행할 수 있게.
     """
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
@@ -206,8 +195,7 @@ def send_weekly_email(week_label: str, domestic_summarized: list[dict], internat
                        failed_sources: list[str],
                        category_comparison: dict[str, dict[str, dict]] | None = None) -> bool:
     """
-    main.py에서 부르는 단일 진입점. 환경변수(GitHub Secrets)에서 인증정보를
-    읽고, 없으면 요약 모듈들과 같은 패턴으로 안전하게 생략한다.
+    main.py에서 부르는 단일 진입점. 환경변수(GitHub Secrets)에서 인증정보를 읽고, 없으면 요약 모듈들과 같은 패턴으로 안전하게 생략한다.
     """
     smtp_user = os.environ.get("SMTP_USER")
     smtp_app_password = os.environ.get("SMTP_APP_PASSWORD")

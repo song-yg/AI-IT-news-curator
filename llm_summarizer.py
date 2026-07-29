@@ -29,64 +29,38 @@ import issue_grouper as _ig  # LLM_PROVIDER, 모델명, API URL, X-Title 상수 
 
 
 _SYSTEM_PROMPT = (
-    "너는 사료·축산업 뉴스 큐레이션 서비스의 요약 작성자다. 주어진 이슈(같은 "
-    "사건을 다루는 기사 제목들과 참고 정보)를 보고 한국어로 2~3문장의 자체 "
-    "요약을 작성하라. 원문을 그대로 옮기지 말고 핵심 내용만 새로 요약한다. "
-    "확실하지 않은 수치나 사실은 "
-    "임의로 만들어내지 말고, 주어진 제목/참고 정보에 있는 내용만 사용한다. "
-    "확실하지 않으면 요약 대신 애매함을 그대로 표현하라. 전문용어·질병명·"
-    "정부기관명·제도명 등 고유명사는 임의로 한글화하지 말고 영문 원어가 "
-    "있으면 괄호로 병기한다. 다른 설명 없이 요약 "
-    "문장만 출력한다."
+    "너는 AI·IT 뉴스 큐레이션 서비스의 요약 작성자다. 주어진 이슈(같은 사건을 다루는 기사 제목들과 참고 정보)를 보고 한국어로 2~3문장의 자체 요약을 작성하라. 원문을 그대로 옮기지 말고 핵심 내용만 새로 요약한다. 확실하지 않은 수치나 사실은 임의로 만들어내지 말고, 주어진 제목/참고 정보에 있는 내용만 사용한다. 확실하지 않으면 요약 대신 애매함을 그대로 표현하라. 전문용어·정부기관명·제도명 등 고유명사는 임의로 한글화하지 말고 영문 원어가 있으면 괄호로 병기한다. 다른 설명 없이 요약 문장만 출력한다."
 )
 
-# 그룹 하나에 기사가 아주 많을 때(예: 50건 이상) 제목을 전부 프롬프트에
-# 넣으면 비용/속도 낭비가 크므로 상한을 둔다 - 나머지는 "외 N건 생략"으로 표시.
+# 그룹 하나에 기사가 아주 많을 때(예: 50건 이상) 제목을 전부 프롬프트에 넣으면 비용/속도 낭비가 크므로 상한을 둔다 - 나머지는 "외 N건 생략"으로 표시.
 _MAX_TITLES_IN_PROMPT = 10
 # 참고 컨텍스트(본문 발췌/description)도 기사 몇 건까지만 볼지 상한
 _MAX_CONTEXT_ARTICLES = 5
 _MAX_BODY_EXCERPT_CHARS = 300
 
-# --- 단독 기사 본문 추가 수집 (2026-07-28, 담당자 요청) ---
+# --- 단독 기사 본문 추가 수집 ---
 #
-# 네이버/GDELT는 본문을 아예 못 가져와서(주요 문장/메타데이터만) "재료
-# 부족"으로 요약이 생략되는 경우가 대부분이었다. WATT처럼 사이트 구조를
-# 하드코딩한 전용 스크레이퍼를 만들 수도 있지만, 네이버/GDELT는 매번 다른
-# 언론사 사이트로 연결되기 때문에(WATT는 사이트 하나 고정) 사이트마다
-# 전용 스크레이퍼를 만드는 건 현실적이지 않다고 판단.
-#
+# 네이버/GDELT는 본문을 아예 못 가져와서(주요 문장/메타데이터만) "재료 부족"으로 요약이 생략되는 경우가 대부분이었다. 
 # 대신 trafilatura(범용 본문 추출 라이브러리)로 "일단 시도라도" 해본다.
-# 사이트별 맞춤 셀렉터 없이 페이지에서 본문으로 보이는 영역을 추측해서
-# 뽑아주는 방식이라 성공률은 사이트마다 들쭉날쭉하다(광고/관련기사를
-# 본문으로 착각하거나, JS로 내용을 그리는 사이트는 애초에 못 뽑음 -
-# trafilatura는 순수 HTTP 요청 방식이라 WATT가 403 먹혀서 Playwright로
-# 바꿨던 것과 같은 부류의 사이트는 여기서도 막힐 수 있음). 실패해도
-# 기존처럼 "재료 부족 -> 요약 생략 + 원문 링크"로 안전하게 fallback하니
-# 지금보다 나빠지는 경우는 없음 - 담당자도 이 트레이드오프를 감수하기로
-# 결정함(전용 스크레이퍼 vs 범용 추출 중 범용 선택).
+# 사이트별 맞춤 셀렉터 없이 페이지에서 본문으로 보이는 영역을 추측해서 뽑아주는 방식이라 성공률은 사이트마다 들쭉날쭉하다(광고/관련기사를 본문으로 착각하거나, JS로 내용을 그리는 사이트는 애초에 못 뽑음.
+# - trafilatura는 순수 HTTP 요청 방식이라 WATT가 403 먹혀서 Playwright로 바꿨던 것과 같은 부류의 사이트는 여기서도 막힐 수 있음).
+#   실패해도 기존처럼 "재료 부족 -> 요약 생략 + 원문 링크"로 안전하게 fallback하니 지금보다 나빠지는 경우는 없음.
 #
-# 비용/부담 통제를 위해 "재료 부족 판정이 실제로 난 시점"에만, 그것도
-# 이미 순위(Top N)로 추려진 기사에 대해서만 시도한다(summarize_top_issues
-# 호출 시점엔 이미 main.py의 TOP_N으로 걸러진 상태 - 전체 수집분 수백 건에
-# 대해 매번 시도하는 게 아님).
+# 비용/부담 통제를 위해 "재료 부족 판정이 실제로 난 시점"에만, 그것도 이미 순위(Top N)로 추려진 기사에 대해서만 시도한다.
+# (summarize_top_issues 호출 시점엔 이미 main.py의 TOP_N으로 걸러진 상태 - 전체 수집분 수백 건에 대해 매번 시도하는 게 아님)
 _BODY_FETCH_TIMEOUT_SECONDS = 10
 _BODY_FETCH_MIN_LENGTH = 200  # has_substantial_material의 본문 기준과 동일
 
-# trafilatura 기본 타임아웃(30초)은 Top N 몇 건에 대해서만 시도한다 해도
-# 사이트가 응답 없이 매달리면 그만큼 전체 실행이 늘어질 수 있어, 위
-# 상수값으로 짧게 맞춰둔다.
+# trafilatura 기본 타임아웃(30초)은 Top N 몇 건에 대해서만 시도한다 해도 사이트가 응답 없이 매달리면 그만큼 전체 실행이 늘어질 수 있어, 위 상수값으로 짧게 맞춰둔다.
 _TRAFILATURA_CONFIG = _trafilatura_use_config()
 _TRAFILATURA_CONFIG.set("DEFAULT", "DOWNLOAD_TIMEOUT", str(_BODY_FETCH_TIMEOUT_SECONDS))
 
 
 def _build_user_prompt(item: dict) -> str:
     """
-    이슈 하나(scorer.score_group() 결과 dict - titles/urls/press_list/articles
-    필드를 가짐)를 LLM 입력 프롬프트로 만든다.
+    이슈 하나(scorer.score_group() 결과 dict - titles/urls/press_list/articles 필드를 가짐)를 LLM 입력 프롬프트로 만든다.
 
-    제목 + (본문 확보된 경우) 본문에서
-    뽑은 핵심 문장 + (네이버 소스인 경우) description을 참고 컨텍스트로
-    추가한다(그대로 인용하지 않고 참고용으로만 사용).
+    제목 + (본문 확보된 경우) 본문에서 뽑은 핵심 문장 + (네이버 소스인 경우) description을 참고 컨텍스트로 추가한다(그대로 인용하지 않고 참고용으로만 사용).
     """
     titles = item.get("titles", [])
     lines = ["다음은 같은 이슈를 다룬 기사 제목들이다:"]
@@ -119,9 +93,8 @@ def _request_openrouter(system_prompt: str, user_prompt: str, api_key: str,
     headers = {
         "Authorization": f"Bearer {api_key}",
         "content-type": "application/json",
-        # ASCII 전용이어야 함 - HTTP 헤더는 latin-1만 허용되므로
-        # 한글이 섞이면 UnicodeEncodeError. issue_grouper의
-        # 검증된 상수를 그대로 재사용
+        # ASCII 전용이어야 함 - HTTP 헤더는 latin-1만 허용되므로 한글이 섞이면 UnicodeEncodeError.
+        # issue_grouper의 검증된 상수를 그대로 재사용
         "X-Title": _ig._OPENROUTER_X_TITLE,
     }
     body = {
@@ -162,36 +135,20 @@ def _request_anthropic(system_prompt: str, user_prompt: str, api_key: str, sessi
 
 def _call_llm(system_prompt: str, user_prompt: str, api_key: str, session: requests.Session) -> str | None:
     """
-    issue_grouper.py의 프로바이더 설정을 재사용해 LLM을 한 번 호출하고 응답
-    텍스트를 반환한다. 실패 시 None (호출부가 "요약 생략, 원문 제목만"으로
-    fallback).
+    issue_grouper.py의 프로바이더 설정을 재사용해 LLM을 한 번 호출하고 응답 텍스트를 반환한다.
+    실패 시 None (호출부가 "요약 생략, 원문 제목만"으로 fallback).
 
-    3차(_call_llm, issue_grouper.py)와 요청 형식은 거의 같지만, 3차는 JSON
-    배열을 기대하는 반면 이건 자연어 문장 하나를 기대한다는 점이 달라서
-    별도 함수로 둔다 - 파싱 방식이 다른데 억지로 하나로 합치면 오히려
-    코드가 더 헷갈림. temperature/max_tokens도 요약 생성 용도에 맞게
-    다르게 줘야 해서(자연어 생성이라 판정보다 살짝 여유), issue_grouper의
-    요청 헬퍼를 그대로 재사용하지 않고 이 파일에 따로 둔다.
+    3차(_call_llm, issue_grouper.py)와 요청 형식은 거의 같지만, 3차는 JSON 배열을 기대하는 반면 이건 자연어 문장 하나를 기대한다는 점이 달라서 별도 함수로 둔다.
+    - 파싱 방식이 다른데 억지로 하나로 합치면 오히려 코드가 더 헷갈림.
+    temperature/max_tokens도 요약 생성 용도에 맞게 다르게 줘야 해서(자연어 생성이라 판정보다 살짝 여유), issue_grouper의 요청 헬퍼를 그대로 재사용하지 않고 이 파일에 따로 둔다.
 
-    session: summarize_top_issues가 이슈마다 반복 호출하므로, 세션을
-    재사용해 커넥션 오버헤드를 줄인다(relevance_filter.py/issue_grouper.py
-    와 동일한 방식).
+    session: summarize_top_issues가 이슈마다 반복 호출하므로, 세션을 재사용해 커넥션 오버헤드를 줄인다(relevance_filter.py/issue_grouper.py와 동일한 방식).
 
     ** 지정 모델 실패 시 다음 후보 모델로 자동 재시도 **
-    openrouter인 경우 _ig._LLM_MODEL_CHAIN_OPENROUTER_ROLES(1순위 -> 2순위 ->
-    3순위 -> 최종 안전망(openrouter/free), issue_grouper.py 상수 선언부
-    참고)를 순서대로 시도한다. 앞 모델이 실패하면(이름 오타, 무료 티어에서
-    빠짐 등) 다음 후보로 자동 재시도 - 특정 모델 하나에 고정한 설정이 그
-    모델만의 문제 때문에 이번 실행의 요약 기능 전체를 막는 걸 방지. 마지막
-    "최종 안전망"까지 실패해야 최종 실패로 처리.
-
-    ** 오류 코드를 역할(순위)별로 고정해서 분리한 이유(2026-07-28) **:
-    issue_grouper.py/relevance_filter.py와 동일 - LS-02(1순위)/LS-03(2순위)/
-    LS-04(3순위)/LS-05(최종 안전망)로 분리해서 어느 순위가 실패했는지 로그
-    grep만으로 구분 가능. 최종 실패는 아래 바깥 except가 기존처럼 LS-01로
-    한 번 더 종합 로그를 남김(이건 "요약 자체가 결국 실패했다"는 상위
-    레벨 신호, LS-05는 "그 원인이 최종 안전망까지 다 막혀서였다"는 하위
-    레벨 신호 - 역할이 다름).
+    openrouter인 경우 _ig._LLM_MODEL_CHAIN_OPENROUTER_ROLES(1순위 -> 2순위 -> 3순위 -> 최종 안전망(openrouter/free), issue_grouper.py 상수 선언부 참고)를 순서대로 시도한다.
+    앞 모델이 실패하면(이름 오타, 무료 티어에서 빠짐 등) 다음 후보로 자동 재시도
+    - 특정 모델 하나에 고정한 설정이 그 모델만의 문제 때문에 이번 실행의 요약 기능 전체를 막는 걸 방지.
+    마지막 "최종 안전망"까지 실패해야 최종 실패로 처리.
     """
     data = None  # 응답 자체를 못 받았을 수도 있으니 미리 초기화(로그에서 안전하게 참조용)
     try:
@@ -219,9 +176,7 @@ def _call_llm(system_prompt: str, user_prompt: str, api_key: str, session: reque
             text, data = _request_anthropic(system_prompt, user_prompt, api_key, session)
             return text
     except Exception as e:
-        # data가 있으면(HTTP 호출 자체는 성공했는데 그 안에서 예상한 필드를
-        # 못 찾은 경우, 예: API 응답 스키마 변경) 실제로 뭘 받았는지 잘라서
-        # 같이 남긴다 - relevance_filter.py/issue_grouper.py와 동일한 이유.
+        # data가 있으면(HTTP 호출 자체는 성공했는데 그 안에서 예상한 필드를 못 찾은 경우, 예: API 응답 스키마 변경) 실제로 뭘 받았는지 잘라서 같이 남긴다 - relevance_filter.py/issue_grouper.py와 동일한 이유.
         snippet = (" ".join(str(data).split())[:200] + "...") if data is not None else "(응답을 아예 못 받음 - 요청/인증 단계에서 실패)"
         print(f"[llm_summarizer] 🔴 조치필요 [LS-01] - LLM({_ig.LLM_PROVIDER}) 호출 실패: {type(e).__name__} - {e!r} "
               f"| 실제 응답: {snippet}")
@@ -230,25 +185,23 @@ def _call_llm(system_prompt: str, user_prompt: str, api_key: str, session: reque
 
 def _is_suspicious_summary(text: str) -> bool:
     """
-    오픈라우터 무료 라우터(openrouter/free)로 요약을 생성하면, 정상 요약
-    대신 콘텐츠 안전성 판정 결과로 보이는 텍스트("User Safety: safe")를
-    그대로 반환하는 경우가 있다. 정확한 원인은 미확인(오픈라우터 무료
-    라우터가 요청마다 다른 실제 모델로 라우팅될 수 있어, 그중 일부가
-    콘텐츠 안전성 필터 응답을 요약 대신 반환하는 것으로 추정할 뿐).
+    오픈라우터 무료 라우터(openrouter/free)로 요약을 생성하면, 정상 요약 대신 콘텐츠 안전성 판정 결과로 보이는 텍스트("User Safety: safe")를 그대로 반환하는 경우가 있다.
+    정확한 원인은 미확인(오픈라우터 무료 라우터가 요청마다 다른 실제 모델로 라우팅될 수 있어, 그중 일부가 콘텐츠 안전성 필터 응답을 요약 대신 반환하는 것으로 추정할 뿐).
 
-    "확실히 요약이 아니라고 판단할 수 있는 좁은 패턴만" 걸러낸다 - 과도하게
-    넓히면 정상 요약도 걸러질 위험이 있어, 실제로 관측된 문구("user
-    safety")만 좁게 대응한다. 품질이 낮거나 짧은 요약까지 거르는 건 범위 밖.
+    "확실히 요약이 아니라고 판단할 수 있는 좁은 패턴만" 걸러낸다.
+     - 과도하게 넓히면 정상 요약도 걸러질 위험이 있어, 실제로 관측된 문구("user safety")만 좁게 대응한다.
+       품질이 낮거나 짧은 요약까지 거르는 건 범위 밖.
     """
     return "user safety" in text.lower()
 
 
 def _fetch_body_via_trafilatura(url: str) -> str | None:
     """
-    주어진 URL에서 범용으로 본문을 추출 시도한다. 사이트별 맞춤 셀렉터가
-    없어서 성공률은 사이트마다 다르다 - 위 상수 선언부의 트레이드오프
-    설명 참고. 실패(다운로드 실패/추출 실패/타임아웃/예외)하면 조용히
-    None을 반환한다 - 호출부가 기존 "재료 부족" 경로로 안전하게 흡수한다.
+    주어진 URL에서 범용으로 본문을 추출 시도한다.
+    사이트별 맞춤 셀렉터가 없어서 성공률은 사이트마다 다르다.
+     - 위 상수 선언부의 트레이드오프 설명 참고.
+       실패(다운로드 실패/추출 실패/타임아웃/예외)하면 조용히 None을 반환한다.
+     - 호출부가 기존 "재료 부족" 경로로 안전하게 흡수한다.
     """
     try:
         downloaded = trafilatura.fetch_url(url, no_ssl=True, config=_TRAFILATURA_CONFIG)
@@ -266,13 +219,11 @@ def _fetch_body_via_trafilatura(url: str) -> str | None:
 
 def summarize_issue(item: dict, session: requests.Session | None = None) -> dict:
     """
-    이슈 하나(scorer.score_group() 결과 dict)에 (A)/(A-1) 로직을 적용해
-    요약을 붙인다. 원본 item은 변경하지 않고 얕은 복사본을 반환한다
-    (호출부가 리스트를 여러 번 다룰 수 있어 부작용 없는 편이 안전).
+    이슈 하나(scorer.score_group() 결과 dict)에 (A)/(A-1) 로직을 적용해 요약을 붙인다.
+    원본 item은 변경하지 않고 얕은 복사본을 반환한다(호출부가 리스트를 여러 번 다룰 수 있어 부작용 없는 편이 안전).
 
-    session: 안 넘기면(예: 이 함수를 단독으로 부를 때) 호출 하나짜리 임시
-    세션을 만들어 안전하게 동작 - summarize_top_issues처럼 여러 건을
-    반복 처리할 때만 세션을 만들어 넘겨주면 재사용 이득이 있다.
+    session: 안 넘기면(예: 이 함수를 단독으로 부를 때) 호출 하나짜리 임시 세션을 만들어 안전하게 동작.
+     - summarize_top_issues처럼 여러 건을 반복 처리할 때만 세션을 만들어 넘겨주면 재사용 이득이 있다.
 
     반환값에 추가되는 필드:
       summary: LLM이 생성한 2~3문장 요약, 또는 None(요약 생략된 경우)
@@ -282,19 +233,6 @@ def summarize_issue(item: dict, session: requests.Session | None = None) -> dict
     titles = item.get("titles", [])
     item_for_prompt = item  # 기본은 원본 그대로 - 본문 추가 수집 성공 시에만 아래서 교체
 
-    # (A-1) 얇은 재료 fallback: 이슈 그룹핑이 안 되고
-    # (그룹 크기 1) 언론사 1곳만 보도한 단독 기사라도, 실제로 요약할 재료가
-    # 있으면(예: WATT는 본문 전체를 긁어오므로 body가 충분히 김) 굳이
-    # 생략할 이유가 없다 - 재료가 얇아서 생략하는 거지, "단독 기사"라서
-    # 생략하는 게 아니다. GDELT는 스펙상 body/description이 아예 없고,
-    # 네이버는 description은 있지만 짧은 스니펫뿐이라 대부분 이 기준에
-    # 못 미침 - 결과적으로 WATT 단독 기사만 예외적으로 요약이 생성된다.
-    #
-    # ** 재료 부족이면 trafilatura로 본문 추가 수집 시도 (2026-07-28) **
-    # 위 상수 선언부 설명 참고 - 네이버/GDELT 단독 기사가 재료 부족으로
-    # 걸리는 대부분의 경우에 해당. 순위(Top N)로 이미 추려진 기사에
-    # 대해서만, 그것도 진짜 재료가 부족할 때만 시도하므로 호출 비용이
-    # 크지 않음. 실패해도 아래 기존 스킵 경로로 안전하게 떨어진다.
     if len(titles) == 1:
         article = item.get("articles", [{}])[0] if item.get("articles") else {}
         body = article.get("body") or ""
@@ -366,13 +304,11 @@ def summarize_issue(item: dict, session: requests.Session | None = None) -> dict
 
 def summarize_top_issues(ranked_items: list[dict], label: str = "") -> list[dict]:
     """
-    scorer.score_and_rank()가 만든 상위 이슈 리스트 전체에 summarize_issue를
-    적용한다. main.py의 4단계 호출부에서 국내/해외 각각 부른다.
+    scorer.score_and_rank()가 만든 상위 이슈 리스트 전체에 summarize_issue를 적용한다.
+    main.py의 4단계 호출부에서 국내/해외 각각 부른다.
 
-    이슈 하나당 LLM 호출이 몇 초~몇십 초 걸릴 수 있어(특히 무료 모델은
-    느리거나 대기열이 걸릴 수 있음), 전체가 끝난 뒤 한꺼번에 출력하지 않고
-    GDELT/WATT collector처럼 항목 하나 처리할 때마다 바로바로 로그를
-    찍는다 - 실행 상태를 실시간으로 볼 수 있게 함.
+    이슈 하나당 LLM 호출이 몇 초~몇십 초 걸릴 수 있어(특히 무료 모델은 느리거나 대기열이 걸릴 수 있음), 전체가 끝난 뒤 한꺼번에 출력하지 않고 GDELT/WATT collector처럼 항목 하나 처리할 때마다 바로바로 로그를 찍는다.
+     - 실행 상태를 실시간으로 볼 수 있게 함.
     """
     results = []
     total = len(ranked_items)
@@ -381,14 +317,6 @@ def summarize_top_issues(ranked_items: list[dict], label: str = "") -> list[dict
             titles = item.get("titles", [])
             rep_title = titles[0] if titles else "(제목 없음)"
             prefix = f"[llm_summarizer] {label} " if label else "[llm_summarizer] "
-            # "요약 요청 중..." 대신 "처리 중..."으로 표현 (2026-07-28) - 이 시점엔
-            # 아직 LLM을 호출할지, 재료가 얇아 코드가 곧바로 생략 처리할지
-            # 결정되지 않았다(summarize_issue 내부의 (A-1) 재료 부족 체크가
-            # LLM 호출보다 먼저 실행됨). "요약 요청 중"이라고 찍으면 마치
-            # 매번 LLM을 호출하는 것처럼 보여 오해의 소지가 있었음 - 실제로는
-            # 재료 부족/API 키 없음 등으로 LLM을 아예 안 부르고 생략되는
-            # 경우가 흔함(바로 아래 결과 로그에서 "요약 완료"인지
-            # "요약 생략"인지, 그리고 생략이면 왜 생략됐는지 사유가 남는다).
             print(f"{prefix}({i}/{total}) '{rep_title}' (그룹 {len(titles)}건) - 처리 중...")
 
             result = summarize_issue(item, session)
@@ -404,8 +332,7 @@ def summarize_top_issues(ranked_items: list[dict], label: str = "") -> list[dict
 
 def print_summaries(label: str, summarized: list[dict]) -> None:
     """
-    결과를 사람이 읽기 좋게 콘솔에 출력한다(scorer.print_top_n과 같은 톤 -
-    storage.py 저장 결과와 별개로 실행 중 진행 확인용).
+    결과를 사람이 읽기 좋게 콘솔에 출력한다(scorer.print_top_n과 같은 톤 - storage.py 저장 결과와 별개로 실행 중 진행 확인용).
 
     요약이 있든 없든 원문 링크는 항상 같이 보여준다.
     """
@@ -422,72 +349,3 @@ def print_summaries(label: str, summarized: list[dict]) -> None:
         shown_urls = ", ".join(urls[:3])
         more_note = f" 외 {len(urls) - 3}건" if len(urls) > 3 else ""
         print(f"   원문 링크: {shown_urls}{more_note}")
-
-
-if __name__ == "__main__":
-    # 자체 점검용 - API 키 없이도 (A-1) fallback 경로와 다건 그룹의 fallback
-    # 경로(키 없음)가 정상 동작하는지 확인. 실제 LLM 호출 성공 경로는 진짜
-    # 키가 있어야 확인 가능하므로 여기선 검증 안 함(수동으로 키 넣고 확인할 것).
-    single_article_issue = {
-        "issue_score": 1.0,
-        "mention_count": 1,
-        "raw_mention_count": 1,
-        "titles": ["단독 보도 - 테스트용 제목"],
-        "urls": ["https://example.com/1"],
-        "press_list": ["testpress.com"],
-        "articles": [{"source": "네이버", "title": "단독 보도 - 테스트용 제목",
-                      "url": "https://example.com/1", "description": "테스트 설명"}],
-    }
-    multi_article_issue = {
-        "issue_score": 3.0,
-        "mention_count": 3,
-        "raw_mention_count": 3,
-        "titles": ["기사 A", "기사 B", "기사 C"],
-        "urls": ["https://example.com/a", "https://example.com/b", "https://example.com/c"],
-        "press_list": ["press1.com", "press2.com", "press3.com"],
-        "articles": [
-            {"source": "네이버", "title": "기사 A", "url": "https://example.com/a", "description": "설명 A"},
-            {"source": "네이버", "title": "기사 B", "url": "https://example.com/b", "description": "설명 B"},
-            {"source": "WATTAgNet", "title": "기사 C", "url": "https://example.com/c", "body": "본문 발췌 C" * 50},
-        ],
-    }
-
-    result1 = summarize_issue(single_article_issue)
-    print("[검증1] 단독 기사(A-1, 네이버 짧은 설명만) - summary:", result1["summary"],
-          "/ reason:", result1["summary_skipped_reason"])
-    assert result1["summary"] is None
-    assert "재료가 얇아" in result1["summary_skipped_reason"]
-
-    # 단독 기사여도 WATT처럼 본문이 충분히 길면 A-1로 생략되지 않고
-    # 정상 요약 시도 경로(이 테스트 환경에선 API 키 없음 fallback)로
-    # 가야 한다 - "단독 기사라서" 무조건 생략하던 예전 동작과의 차이 확인.
-    single_watt_issue = {
-        "issue_score": 1.0,
-        "mention_count": 1,
-        "raw_mention_count": 1,
-        "titles": ["WATT 단독 보도 - 테스트용 제목"],
-        "urls": ["https://example.com/watt1"],
-        "press_list": ["feedstrategy.com"],
-        "articles": [{"source": "Feed Strategy", "title": "WATT 단독 보도 - 테스트용 제목",
-                      "url": "https://example.com/watt1", "body": "충분히 긴 본문 발췌입니다. " * 20}],
-    }
-    os.environ.pop("ANTHROPIC_API_KEY", None)
-    os.environ.pop("OPENROUTER_API_KEY", None)
-    result1b = summarize_issue(single_watt_issue)
-    print("[검증1b] 단독 기사(본문 충분, WATT) - summary:", result1b["summary"],
-          "/ reason:", result1b["summary_skipped_reason"])
-    assert result1b["summary"] is None  # 이 테스트 환경엔 API 키가 없어 결국 요약은 안 나옴
-    assert "재료가 얇아" not in result1b["summary_skipped_reason"], "본문이 충분하면 A-1(재료 부족)로 생략되면 안 됨"
-    assert "없음" in result1b["summary_skipped_reason"]  # API 키 없음 fallback으로 넘어갔어야 함
-
-    # API 키를 일부러 지운 상태에서 다건 그룹을 넣어 "키 없음" fallback 확인
-    os.environ.pop("ANTHROPIC_API_KEY", None)
-    os.environ.pop("OPENROUTER_API_KEY", None)
-    result2 = summarize_issue(multi_article_issue)
-    print("[검증2] 다건 그룹, API 키 없음 - summary:", result2["summary"],
-          "/ reason:", result2["summary_skipped_reason"])
-    assert result2["summary"] is None
-    assert "없음" in result2["summary_skipped_reason"]
-
-    print_summaries("테스트", [result1, result2])
-    print("\n[llm_summarizer] 자체 점검 통과 (A-1 fallback + 키 없음 fallback)")

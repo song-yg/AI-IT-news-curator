@@ -15,8 +15,7 @@ from dotenv import load_dotenv
 import keyword_source
 
 # 실행 시점에 .env 파일을 찾아서 그 안의 값들을 환경변수로 등록해준다.
-# .env 파일이 없어도 에러 없이 그냥 넘어감 (예: GitHub Actions에서는
-# .env 없이 Secrets가 이미 환경변수로 주입돼 있으므로 이 줄은 그냥 무시됨)
+# .env 파일이 없어도 에러 없이 그냥 넘어감. (예: GitHub Actions에서는 .env 없이 Secrets가 이미 환경변수로 주입돼 있으므로 이 줄은 그냥 무시됨)
 load_dotenv()
 
 NAVER_API_URL = "https://openapi.naver.com/v1/search/news.json"
@@ -134,7 +133,7 @@ def search_naver_news(keyword: str, client_id: str, client_secret: str, start: i
     """
     네이버 뉴스 검색 API를 호출해서, 결과를 우리 공통 스키마 형태로 정리해 돌려준다.
 
-    keyword       : 검색어 (예: "조류독감")
+    keyword       : 검색어
     client_id     : 네이버 개발자센터에서 발급받은 애플리케이션 ID
     client_secret : 위와 함께 발급받은 비밀키
     start         : 몇 번째 결과부터 가져올지 (1, 101, 201 ... 페이지네이션용)
@@ -197,15 +196,13 @@ def _extract_press(originallink: str) -> str:
 
     예: "https://www.yna.co.kr/view/AKR2026..." -> "yna.co.kr"
 
-    www. 제거는 .replace("www.", "") 대신 startswith 체크 후 슬라이싱을 쓴다
-    - .replace()는 문자열 어디에 있든 매칭돼서, 서브도메인 이름 중간에 우연히 "www."가 들어간 경우(드물지만 가능) 의도치 않게 지워질 수 있다.
-      startswith는 맨 앞에 있을 때만 제거하므로 더 안전.
+    www. 제거는 .replace("www.", "") 대신 startswith 체크 후 슬라이싱을 쓴다.
+     - .replace()는 문자열 어디에 있든 매칭돼서, 서브도메인 이름 중간에 우연히 "www."가 들어간 경우(드물지만 가능) 의도치 않게 지워질 수 있다.
+       startswith는 맨 앞에 있을 때만 제거하므로 더 안전.
 
-    서브도메인 통합(예: biz.yna.co.kr / www.yna.co.kr을 같은 언론사로
-    인식)은 하지 않는다 - 정확히 하려면 한국 도메인 특유의 복합
-    접미사(.co.kr, .or.kr, .go.kr 등)를 다뤄야 해서 간단한 규칙으로는
-    안 되고 tldextract 같은 라이브러리가 필요함. 실제로 문제(scorer.py의
-    PRESS_DEDUP_CAP 정확도 왜곡)가 확인되면 그때 대응한다.
+    서브도메인 통합(예: biz.yna.co.kr / www.yna.co.kr을 같은 언론사로 인식)은 하지 않는다.
+     - 정확히 하려면 한국 도메인 특유의 복합 접미사(.co.kr, .or.kr, .go.kr 등)를 다뤄야 해서 간단한 규칙으로는 안 되고 tldextract 같은 라이브러리가 필요함.
+       실제로 문제(scorer.py의 PRESS_DEDUP_CAP 정확도 왜곡)가 확인되면 그때 대응한다.
     """
     if not originallink:
         return ""
@@ -217,10 +214,7 @@ def _extract_press(originallink: str) -> str:
 
 def _strip_html_tags(text: str) -> str:
     """
-    네이버 API 응답의 title/description에는 검색어 강조를 위해
-    <b>태그</b>가 섞여서 온다. 이걸 제거하고 순수 텍스트만 남긴다.
-
-    예: "고병원성 <b>조류독감</b> 국내 첫 발생" -> "고병원성 조류독감 국내 첫 발생"
+    네이버 API 응답의 title/description에는 검색어 강조를 위해 <b>태그</b>가 섞여서 온다. 이걸 제거하고 순수 텍스트만 남긴다.
     """
     # 1) <...> 형태의 태그를 전부 빈 문자열로 치환
     text = re.sub(r"<[^>]+>", "", text)

@@ -45,9 +45,8 @@ def count_by_category(articles: list[dict]) -> Counter:
     """
     기사 리스트 하나를 받아 카테고리별 건수를 센다.
 
-    articles는 keyword_tagger.tag_articles()가 이미 "category" 필드를
-    채워둔 상태여야 한다 (2.2 태깅이 먼저 실행돼 있어야 함 - 이 함수 자체는
-    태깅을 하지 않고, 이미 붙어있는 category 필드만 집계한다).
+    articles는 keyword_tagger.tag_articles()가 이미 "category" 필드를 채워둔 상태여야 한다.
+    (2.2 태깅이 먼저 실행돼 있어야 함 - 이 함수 자체는 태깅을 하지 않고, 이미 붙어있는 category 필드만 집계한다)
     """
     return Counter(a.get("category", "기타") for a in articles)
 
@@ -57,8 +56,7 @@ def aggregate(articles: list[dict]) -> dict[str, Counter]:
     국내/해외 두 축으로 나눠서 각각 카테고리별 건수를 집계한다.
 
     반환값: {"국내": Counter, "해외": Counter}
-    (scorer.split_domestic_international과 동일한 축 정의 - 네이버=국내,
-    WATT/GDELT=해외)
+    (scorer.split_domestic_international과 동일한 축 정의 - 네이버=국내, WATT/GDELT=해외)
     """
     domestic, international = scorer.split_domestic_international(articles)
     return {
@@ -98,20 +96,14 @@ def compare_with_last_week(current: dict[str, Counter], base_dir: str = "data",
     이번 주 카테고리 집계(aggregate()의 반환값)를 지난주 scored.json의 category_distribution과 비교한다.
 
     비교 대상을 category_distribution(카테고리별 단순 건수)으로 정한 이유:
-    이 값이 애초에 "다음 주 실행에서 지난주 대비 증감을 계산하려면 지난주
-    집계 결과가 파일로 남아있어야 한다"는 목적으로 저장돼온 데이터라
-    (storage.save_scored docstring 참고) 가장 자연스러운 1차 비교 대상.
-    이슈(Top N) 단위 비교("이 이슈가 지난주에도 있었나")는 그룹 매칭이 훨씬
-    까다로워서(제목이 매주 조금씩 다름, 그룹핑 자체가 매주 새로 돎) 범위
-    밖으로 남겨둠.
+    이 값이 애초에 "다음 주 실행에서 지난주 대비 증감을 계산하려면 지난주 집계 결과가 파일로 남아있어야 한다"는 목적으로 저장돼온 데이터라(storage.save_scored docstring 참고) 가장 자연스러운 1차 비교 대상.
+    이슈(Top N) 단위 비교("이 이슈가 지난주에도 있었나")는 그룹 매칭이 훨씬 까다로워서(제목이 매주 조금씩 다름, 그룹핑 자체가 매주 새로 돎) 범위 밖으로 남겨둠.
 
-    지난주 파일이 없으면(첫 실행, 혹은 지난주 저장이 실패했던 경우) 예외를
-    던지지 않고 None을 반환한다 - 호출부가 이걸 보고 "지난주 데이터 없음"
-    으로 안전하게 표시하면 됨.
+    지난주 파일이 없으면(첫 실행, 혹은 지난주 저장이 실패했던 경우) 예외를 던지지 않고 None을 반환한다.
+    - 호출부가 이걸 보고 "지난주 데이터 없음"으로 안전하게 표시하면 됨.
 
     반환값 (지난주 데이터가 있는 경우):
-      {"국내": {카테고리: {"this_week": int, "last_week": int, "delta": int}, ...},
-       "해외": {...}}
+      {"국내": {카테고리: {"this_week": int, "last_week": int, "delta": int}, ...}, "해외": {...}}
     두 주 중 어느 한쪽에만 등장한 카테고리도 전부 포함(없는 쪽은 0으로 취급).
     """
     path = os.path.join(storage.previous_week_dir(base_dir, reference), "scored.json")
@@ -121,12 +113,8 @@ def compare_with_last_week(current: dict[str, Counter], base_dir: str = "data",
 
         last_week_distribution = last_week_payload.get("category_distribution")
         if not isinstance(last_week_distribution, dict):
-            # None(키 없음/null)이든 리스트 등 다른 타입이든, "지난주 값을
-            # 못 읽는다"는 점에서는 파일 자체가 없는 것과 동일한 상황이다.
-            # 여기서 빈 dict로 조용히 대체해버리면 "지난주 0건 -> 이번 주
-            # 5건, +5"처럼 실제로는 데이터가 없을 뿐인데 진짜 증가처럼
-            # 보이는 오해를 줄 수 있어, 명시적으로 실패시켜 아래 except에서
-            # 똑같이 "비교 생략"으로 처리되게 한다.
+            # None(키 없음/null)이든 리스트 등 다른 타입이든, "지난주 값을 못 읽는다"는 점에서는 파일 자체가 없는 것과 동일한 상황이다.
+            # 여기서 빈 dict로 조용히 대체해버리면 "지난주 0건 -> 이번 주 5건, +5"처럼 실제로는 데이터가 없을 뿐인데 진짜 증가처럼 보이는 오해를 줄 수 있어, 명시적으로 실패시켜 아래 except에서 똑같이 "비교 생략"으로 처리되게 한다.
             raise ValueError(f"category_distribution이 dict가 아님(타입: {type(last_week_distribution).__name__})")
 
         comparison = {}
@@ -154,10 +142,8 @@ def compare_with_last_week(current: dict[str, Counter], base_dir: str = "data",
               f"증감 비교 생략: {type(e).__name__} - {e!r}")
         return None
     except (ValueError, AttributeError, TypeError, KeyError) as e:
-        # 파일은 읽혔지만 category_distribution이 예상 구조(축별 dict)가
-        # 아닌 경우(예: null, 리스트 등으로 손상된 지난주 파일) - 위 첫
-        # except와 마찬가지로 "지난주 데이터를 못 쓴다"는 같은 결론이라
-        # 동일하게 안전한 None으로 처리한다.
+        # 파일은 읽혔지만 category_distribution이 예상 구조(축별 dict)가 아닌 경우(예: null, 리스트 등으로 손상된 지난주 파일)
+        # - 위 첫 except와 마찬가지로 "지난주 데이터를 못 쓴다"는 같은 결론이라 동일하게 안전한 None으로 처리한다.
         print(f"[category_aggregator] 🟡 주의 [CA-02] - 지난주 데이터 구조 이상({path}) - "
               f"증감 비교 생략: {type(e).__name__} - {e!r}")
         return None
@@ -166,9 +152,8 @@ def compare_with_last_week(current: dict[str, Counter], base_dir: str = "data",
 def print_aggregate_with_comparison(aggregated: dict[str, Counter],
                                      comparison: dict[str, dict[str, dict]] | None) -> None:
     """
-    print_aggregate()와 같은 표를 만들되, comparison이 있으면(지난주 데이터가
-    있으면) 각 줄에 지난주 대비 증감을 같이 붙인다. comparison이 None이면
-    print_aggregate()와 동일하게 동작(증감 표시 없이).
+    print_aggregate()와 같은 표를 만들되, comparison이 있으면(지난주 데이터가 있으면) 각 줄에 지난주 대비 증감을 같이 붙인다.
+    comparison이 None이면 print_aggregate()와 동일하게 동작(증감 표시 없이).
     """
     for axis in ("국내", "해외"):
         counter = aggregated.get(axis, Counter())
@@ -191,20 +176,3 @@ def print_aggregate_with_comparison(aggregated: dict[str, Counter],
                 sign = "+" if delta >= 0 else ""
                 line += f" [지난주 {last_count}건, {sign}{delta}]"
             print(line)
-
-
-if __name__ == "__main__":
-    # 자체 점검용 - keyword_tagger 없이도(카테고리 미리 붙여서) 집계 로직만 확인
-    sample_articles = [
-        {"source": "네이버", "category": "질병명"},
-        {"source": "네이버", "category": "질병명"},
-        {"source": "네이버", "category": "시장/가격 용어"},
-        {"source": "WATTAgNet", "category": "질병명"},
-        {"source": "GDELT", "category": "기타"},
-    ]
-    result = aggregate(sample_articles)
-    print_aggregate(result)
-    assert result["국내"]["질병명"] == 2
-    assert result["해외"]["질병명"] == 1
-    assert result["해외"]["기타"] == 1
-    print("\n[category_aggregator] 자체 점검 통과")
