@@ -10,33 +10,13 @@ naver_collector / watt_collector와 반환 형태가 다르다는 점이 핵심 
   - timeline: 키워드 단위 시계열(timelinevol/timelinevolraw) -> 기사 단위가 아니라서 공통 스키마에 억지로 끼워넣지 않음.
     3.1 규칙대로 스코어링에는 안 들어가고 결과물에 참고 지표로만 별도 표시됨 (저장 레이어가 알아서 분리 저장)
 
-시계열 수집은 완전히 제거된 상태다: tuple(articles, timeline) 반환 형태
-자체는 하위호환을 위해 그대로 유지하지만, timeline은 이제 항상 빈
-딕셔너리(`{}`)다 - 실전 규모 테스트에서도 429로 오래 실패하는 등 불안정성이
-해소가 안 됐고, 저장 레이어가 이 데이터를 애초에 안 쓰고 있었던 것도 제거
-결정에 힘을 실었다. 상세 → `collect()` 함수 docstring 및
-`_collect_timeline_for_keyword` 참고(코드는 남겨둠, 호출만 제거).
-
 ** GDELT 429(rate limit) 대응 정리 **
-GDELT 429가 구조적으로 심해서(요청 대부분에서 발생, 원인이 GDELT 서버
-쪽 트래픽 총량으로 추정돼 우리 코드로 완전히 해결은 불가) 여러 겹의
-완화책을 적용했다:
+GDELT 429가 구조적으로 심해서(요청 대부분에서 발생, 원인이 GDELT 서버 쪽 트래픽 총량으로 추정돼 우리 코드로 완전히 해결은 불가) 여러 겹의 완화책을 적용했다:
   1. REQUEST_INTERVAL을 넉넉히 두고, 429 시 전역 공유 쿨다운으로 백오프
-     (호출별 개별 대기가 아니라 - 자세한 이유는 _call_with_retry,
-     _wait_for_cooldown 참고)
-  2. 키워드 단위 "외부 재시도": article_search가 최종 실패한 키워드만
-     모아서, 한 라운드가 끝난 뒤 별도 라운드로 최대 OUTER_RETRY_PASSES
-     번 더 재시도
-  3. User-Agent 헤더 주입: gdeltdoc 라이브러리 자체 이슈 트래커(#22)에서
-     "User-Agent 없이 요청하면 rate limit, 추가하면 해결"이라는 보고를
-     확인 - requests 기본 헤더를 오버라이드하는 방식으로 적용(아래
-     "User-Agent 미기재 가설 대응" 주석 참고)
-  4. 키워드를 하나의 OR 쿼리로 결합: gdeltdoc의 Filters(keyword=[...])가
-     리스트를 자동으로 OR로 묶어준다는 걸 확인(공식 README) - 요청 횟수
-     자체를 줄여 429에 걸릴 기회를 줄임. 시계열은 "키워드별
-     트렌드"가 의미가 있어야 하므로(지금은 항상 빈 값이라 실질적 영향은
-     없음) 이건 합치지 않고 키워드별로 유지하는 구조를 남겨둠
-     (_collect_articles_for_keywords 및 collect() 참고).
+     (호출별 개별 대기가 아니라 - 자세한 이유는 _call_with_retry, _wait_for_cooldown 참고)
+  2. 키워드 단위 "외부 재시도": article_search가 최종 실패한 키워드만 모아서, 한 라운드가 끝난 뒤 별도 라운드로 최대 OUTER_RETRY_PASSES번 더 재시도
+  3. User-Agent 헤더 주입: gdeltdoc 라이브러리 자체 이슈 트래커(#22)에서 "User-Agent 없이 요청하면 rate limit, 추가하면 해결"이라는 보고를 확인 - requests 기본 헤더를 오버라이드하는 방식으로 적용(아래 "User-Agent 미기재 가설 대응" 주석 참고)
+  4. 키워드를 하나의 OR 쿼리로 결합: gdeltdoc의 Filters(keyword=[...])가 리스트를 자동으로 OR로 묶어준다는 걸 확인(공식 README) - 요청 횟수 자체를 줄여 429에 걸릴 기회를 줄임. 
 """
 
 import json
@@ -56,26 +36,18 @@ from gdeltdoc import GdeltDoc, Filters
 from gdeltdoc.errors import RateLimitError
 
 
-# gdeltdoc이 헤더 주입 방법을 공식 제공하지 않으므로, requests 라이브러리의
-# 기본 헤더(default_headers()) 자체를 오버라이드하는 방식으로 우회한다 -
-# Session()이 생성될 때마다 이 함수가 호출되므로, gdeltdoc이 내부적으로
-# 만드는 Session에도 자연히 적용된다.
+# gdeltdoc이 헤더 주입 방법을 공식 제공하지 않으므로, requests 라이브러리의 기본 헤더(default_headers()) 자체를 오버라이드하는 방식으로 우회한다.
+# - Session()이 생성될 때마다 이 함수가 호출되므로, gdeltdoc이 내부적으로 만드는 Session에도 자연히 적용된다.
 #
-# ** 주의 - 이건 프로세스 전역에 영향을 준다 **: 이 모듈을 import하는 순간
-# requests 기본 헤더가 바뀌어서, 같은 프로세스에서 실행되는 naver_collector의
-# requests.get 호출에도 이 User-Agent가 섞여 들어간다(naver_collector는
-# X-Naver-Client-Id 등 자기 인증 헤더만 명시적으로 쓰고 User-Agent는 따로
-# 지정 안 하므로 - 인증은 헤더 값 기반이라 UA가 섞여도 인증 자체엔 영향 없음,
-# 다만 "전역 부작용"이라는 점은 유지보수 시 반드시 인지할 것). WATT_collector
-# 가 이미 쓰고 있는 것과 동일한 UA 문자열을 재사용해 일관성을 맞춤.
+# ** 주의 - 이건 프로세스 전역에 영향을 준다 **:
+# 이 모듈을 import하는 순간 requests 기본 헤더가 바뀌어서, 같은 프로세스에서 실행되는 naver_collector의 requests.get 호출에도 이 User-Agent가 섞여 들어간다.
+# (naver_collector는 X-Naver-Client-Id 등 자기 인증 헤더만 명시적으로 쓰고 User-Agent는 따로 지정 안 하므로 - 인증은 헤더 값 기반이라 UA가 섞여도 인증 자체엔 영향 없음, 다만 "전역 부작용"이라는 점은 유지보수 시 반드시 인지할 것).
 _GDELT_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 
-# requests.sessions 모듈이 `from .utils import default_headers`로 자기
-# 네임스페이스에 직접 바인딩해서 쓰기 때문에, requests.utils.default_headers
-# 만 바꾸면 Session.__init__() 내부에서 부르는 건 여전히 원래 함수다.
+# requests.sessions 모듈이 `from .utils import default_headers`로 자기 네임스페이스에 직접 바인딩해서 쓰기 때문에, requests.utils.default_headers 만 바꾸면 Session.__init__() 내부에서 부르는 건 여전히 원래 함수다.
 # requests.sessions 쪽 바인딩도 같이 덮어써야 실제 Session 생성에 반영된다.
 #
 # 가드(_gdelt_ua_patched)를 두는 이유: 이 모듈이 어떤 경로로든 두 번 로드되면
@@ -651,6 +623,7 @@ def _collect_articles_for_keyword(gd: "GdeltDoc", keyword: str) -> tuple[bool, l
 
     try:
         articles_df = _call_with_retry(gd.article_search, f, label=f"{keyword} / article_search")
+        print(f"[DEBUG] 원본 응답 건수(필터 전): {0 if articles_df is None else len(articles_df)}건")
 
         if articles_df is not None and not articles_df.empty:
             for _, row in articles_df.iterrows():
