@@ -46,15 +46,12 @@ import relevance_filter
 import storage
 import deploy
 
-# 주간 Top N (국내/해외 축 각각 몇 건까지 뽑을지) + 카테고리별 Top N
-# (카테고리 축에서도 별도로 몇 건까지 뽑을지) - 둘 다 환경변수로 조정
-# 가능하게 함(2026-07-28, 담당자 요청). 미설정 시 기존과 동일한 기본값
-# (5 / 1)으로 동작 - 하위호환.
+# 주간 Top N (국내/해외 축 각각 몇 건까지 뽑을지) + 카테고리별 Top N (카테고리 축에서도 별도로 몇 건까지 뽑을지)
+# - 둘 다 환경변수로 조정 가능하게 함.
+# 미설정 시 기존과 동일한 기본값(5 / 1)으로 동작 - 하위호환.
 #
-# CATEGORY_TOP_N 관련: LLM 요약 호출이 카테고리 수(최대 9개) x 국내/해외(2)
-# x 이 값만큼 늘어나므로 무작정 올리면 API 호출이 급격히 늘어남 - 특히
-# OpenRouter 무료 티어 일일 요청 한도(위 "4. LLM 요약" 섹션 참고)를 고려해서
-# 조정할 것.
+# CATEGORY_TOP_N 관련: LLM 요약 호출이 카테고리 수(최대 9개) x 국내/해외(2) x 이 값만큼 늘어나므로 무작정 올리면 API 호출이 급격히 늘어남.
+# - 특히 OpenRouter 무료 티어 일일 요청 한도(위 "4. LLM 요약" 섹션 참고)를 고려해서 조정할 것.
 TOP_N = int(os.environ.get("TOP_N") or 5)
 CATEGORY_TOP_N = int(os.environ.get("CATEGORY_TOP_N") or 1)
 
@@ -65,7 +62,7 @@ CATEGORY_TOP_N = int(os.environ.get("CATEGORY_TOP_N") or 1)
 
 def run_collectors() -> tuple[list[dict], dict, list[str]]:
     """
-    naver/gdelt collector를 순서대로 실행한다.
+    햣naver/gdelt collector를 순서대로 실행한다.
 
     소스별 독립 실행 구조 - 각 collector 호출을 개별 try/except로 감싸서 하나가 완전히 죽어도(예: import 실패, 예상 밖 예외) 나머지 소스는 계속 진행한다.
     각 collector 내부에도 이미 더 세밀한 단위(키워드별)의 방어가 있지만, 여기 main.py 레벨의 try/except는 "collector 모듈 자체가 통째로 실패하는 경우"에 대한 마지막 방어선이다.
