@@ -24,15 +24,12 @@ NAVER_API_URL = "https://openapi.naver.com/v1/search/news.json"
 # 이 프로젝트는 주 1회 실행이므로, 최근 7일 이내 기사만 남긴다.
 DAYS_BACK = 7
 
-# 예시 키워드(fallback). 구글 시트(KEYWORD_SHEET_CSV_URL)가 설정돼 있으면
-# 그쪽을 우선 쓰고, 없거나 읽기 실패하면 이 리스트로 대체된다
-# (keyword_source.py 참고 - 시트 편집만으로 키워드 추가 가능).
+# 예시 키워드(fallback). 구글 시트(KEYWORD_SHEET_CSV_URL)가 설정돼 있으면 그쪽을 우선 쓰고, 없거나 읽기 실패하면 이 리스트로 대체된다.
+# (keyword_source.py 참고 - 시트 편집만으로 키워드 추가 가능)
 #
-# 시트가 나중에 바뀌면 이 fallback도 수동으로 같이 갱신해줘야 한다(자동
-# 동기화 아님 - keyword_source.py는 시트 실패 시 이 하드코딩 값을 그대로
-# 쓸 뿐, 시트 변경을 감지해 여기로 역으로 반영하는 기능은 없음).
-KEYWORDS = ["조류독감", "사료가격", "방역대", "가축 이동제한", "양돈",
-            "사료공장", "사료첨가제", "축산물 할당관세", "축산업 계열화", "스마트축사"]
+# 시트가 나중에 바뀌면 이 fallback도 수동으로 같이 갱신해줘야 한다.
+# (자동 동기화 아님 - keyword_source.py는 시트 실패 시 이 하드코딩 값을 그대로 쓸 뿐, 시트 변경을 감지해 여기로 역으로 반영하는 기능은 없음).
+KEYWORDS = ["인공지능", "AI", "머신러닝", "딥러닝", "챗GPT", "생성형 AI", "자율주행", "로봇", "드론", "메타버스", "가상현실", "증강현실", "블록체인", "NFT", "핀테크", "빅데이터", "클라우드", "사이버보안", "양자컴퓨팅"]
 
 
 def _is_recent(published_at: str, days: int) -> bool:
@@ -42,8 +39,7 @@ def _is_recent(published_at: str, days: int) -> bool:
     예: DAYS_BACK=7이면, 오늘이 7/13일 때 7/6일 이전 기사는 False가 됨.
     """
     pub_dt = datetime.fromisoformat(published_at)
-    # pub_dt에 이미 +09:00 같은 시간대 정보가 들어있으므로,
-    # 비교 기준(now)도 같은 시간대로 맞춰줘야 에러 없이 비교 가능하다.
+    # pub_dt에 이미 +09:00 같은 시간대 정보가 들어있으므로, 비교 기준(now)도 같은 시간대로 맞춰줘야 에러 없이 비교 가능하다.
     cutoff = datetime.now(pub_dt.tzinfo) - timedelta(days=days)
     return pub_dt >= cutoff
 
@@ -54,18 +50,12 @@ MAX_START = 1000
 
 def _phrase_present(article: dict, keyword: str) -> bool:
     """
-    네이버 뉴스 검색 API는 공백으로 구분된 검색어를 "정확한 문구"가 아니라
-    "각 단어의 AND"로 처리한다 - 예를 들어 "축산물 수급"을 검색하면
-    "축산물"이라는 단어와 "수급"이라는 단어가 같은 기사 안 어디에나 각각
-    등장하기만 해도 매칭된다. "수급"처럼 극도로 범용적인 단어(인력 수급/
-    물량 수급/배우 수급 등 축산과 무관한 맥락에서도 흔히 쓰임)가 섞인
-    키워드는 이 방식 때문에 무관한 기사(프랜차이즈 기사, 영화 리뷰 등에
-    "축산물"과 "수급"이 각각 다른 맥락으로 우연히 같이 등장)가 섞여
-    들어올 수 있다.
+    네이버 뉴스 검색 API는 공백으로 구분된 검색어를 "정확한 문구"가 아니라 "각 단어의 AND"로 처리한다
+    - 예를 들어 "축산물 수급"을 검색하면 "축산물"이라는 단어와 "수급"이라는 단어가 같은 기사 안 어디에나 각각 등장하기만 해도 매칭된다.
+    "수급"처럼 극도로 범용적인 단어(인력 수급/물량 수급/배우 수급 등 축산과 무관한 맥락에서도 흔히 쓰임)가 섞인 키워드는 이 방식 때문에 무관한 기사(프랜차이즈 기사, 영화 리뷰 등에 "축산물"과 "수급"이 각각 다른 맥락으로 우연히 같이 등장)가 섞여 들어올 수 있다.
 
-    검색어에 공백이 있는(여러 단어로 구성된) 키워드만, 실제로 그 문구가
-    제목+요약에 붙어서(인접해서) 등장하는지 재확인해서 걸러낸다. 단어
-    하나짜리 키워드는 애초에 AND로 인한 오탐 여지가 없으므로 항상 통과.
+    검색어에 공백이 있는(여러 단어로 구성된) 키워드만, 실제로 그 문구가 제목+요약에 붙어서(인접해서) 등장하는지 재확인해서 걸러낸다.
+    단어 하나짜리 키워드는 애초에 AND로 인한 오탐 여지가 없으므로 항상 통과.
     """
     if " " not in keyword.strip():
         return True
@@ -81,27 +71,18 @@ def collect() -> list[dict]:
     이 함수가 naver_collector의 '진입점'(다른 모듈에서 이걸 호출해서 씀).
     """
     # API 키는 코드에 절대 직접 안 적는다. 환경변수로 읽어온다.
-    # 이유: 이 코드는 GitHub 리포에 올라가는데, 키를 코드에 박으면
-    #       리포를 보는 모든 사람(공개 리포면 전 세계)이 키를 볼 수 있게 됨.
-    #       GitHub Actions에서 돌릴 때는 "Secrets"라는 별도 저장소에
-    #       키를 등록해두고, 실행 시점에만 환경변수로 주입받는다.
     client_id = os.environ["NAVER_CLIENT_ID"]
     client_secret = os.environ["NAVER_CLIENT_SECRET"]
 
-    # 구글 시트에 등록된 활성 키워드를 우선 사용하고, 시트 미설정/읽기
-    # 실패 시 위 KEYWORDS(하드코딩)로 안전하게 대체(keyword_source.py
-    # 참고 - 이 함수는 예외를 던지지 않음)
+    # 구글 시트에 등록된 활성 키워드를 우선 사용하고, 시트 미설정/읽기 실패 시 위 KEYWORDS(하드코딩)로 안전하게 대체(keyword_source.py 참고 - 이 함수는 예외를 던지지 않음)
     target_keywords = keyword_source.get_keywords("ko", KEYWORDS)
 
     all_results = []
-    # 세션 재사용: 키워드마다 여러 페이지를 반복 호출하는 구조라(최대
-    # 10페이지 x 키워드 수), 세션을 하나만 만들어 재사용하면 커넥션이
-    # 유지돼 반복 호출의 오버헤드가 줄어든다.
+    # 세션 재사용: 키워드마다 여러 페이지를 반복 호출하는 구조라(최대 10페이지 x 키워드 수), 세션을 하나만 만들어 재사용하면 커넥션이 유지돼 반복 호출의 오버헤드가 줄어든다.
     with requests.Session() as session:
         for keyword in target_keywords:
-            # try 범위는 "네트워크 호출이 실제로 일어나는 부분"으로 좁히고,
-            # extend는 항상(성공이든 부분 실패든) 실행되도록 밖에 둔다 -
-            # 페이지네이션 도중 예외가 나도 이미 모은 결과는 보존하기 위함.
+            # try 범위는 "네트워크 호출이 실제로 일어나는 부분"으로 좁히고, extend는 항상(성공이든 부분 실패든) 실행되도록 밖에 둔다.
+            # - 페이지네이션 도중 예외가 나도 이미 모은 결과는 보존하기 위함.
             keyword_results = []
             start = 1
             try:
@@ -113,8 +94,7 @@ def collect() -> list[dict]:
                         break
 
                     recent_in_page = [r for r in page if _is_recent(r["published_at"], DAYS_BACK)]
-                    # AND 매칭 오탐 방지 필터 (_phrase_present docstring
-                    # 참고) - 여러 단어로 된 키워드만 대상.
+                    # AND 매칭 오탐 방지 필터 (_phrase_present docstring 참고) - 여러 단어로 된 키워드만 대상.
                     phrase_ok = [r for r in recent_in_page if _phrase_present(r, keyword)]
                     filtered_out = len(recent_in_page) - len(phrase_ok)
                     if filtered_out:
@@ -126,8 +106,7 @@ def collect() -> list[dict]:
                     # (sort=date로 최신순 정렬돼 있으므로 항상 마지막이 제일 오래됨)
                     oldest_in_page = page[-1]
                     if not _is_recent(oldest_in_page["published_at"], DAYS_BACK):
-                        # 이 페이지 끝에서 이미 기간을 벗어났다 -> 다음 페이지는
-                        # 이보다 더 오래된 기사만 있을 게 뻔하므로 더 안 가져와도 됨
+                        # 이 페이지 끝에서 이미 기간을 벗어났다 -> 다음 페이지는 이보다 더 오래된 기사만 있을 게 뻔하므로 더 안 가져와도 됨
                         break
 
                     if len(page) < 100:
@@ -137,8 +116,7 @@ def collect() -> list[dict]:
                     start += 100
                     time.sleep(0.2)  # 페이지 사이에도 간격을 둠
             except requests.exceptions.RequestException as e:
-                # 이 키워드의 나머지 페이지는 못 가져왔지만, 지금까지 모은
-                # keyword_results는 아래에서 그대로 살려서 반영한다.
+                # 이 키워드의 나머지 페이지는 못 가져왔지만, 지금까지 모은 keyword_results는 아래에서 그대로 살려서 반영한다.
                 print(f"[naver] 🔴 조치필요 [NV-01] - '{keyword}' 수집 중 오류 발생(지금까지 모은 "
                       f"{len(keyword_results)}건은 보존하고 다음 키워드로 진행): {type(e).__name__} - {e!r}")
 
@@ -160,10 +138,8 @@ def search_naver_news(keyword: str, client_id: str, client_secret: str, start: i
     client_id     : 네이버 개발자센터에서 발급받은 애플리케이션 ID
     client_secret : 위와 함께 발급받은 비밀키
     start         : 몇 번째 결과부터 가져올지 (1, 101, 201 ... 페이지네이션용)
-    session       : 재사용할 requests.Session. 안 넘기면(예: 이 함수를
-                    단독으로 테스트할 때) requests 모듈 자체를 그대로 써서
-                    매번 새 연결을 맺는 방식으로 안전하게 동작함 - 세션
-                    재사용은 순전히 성능 최적화라 없어도 기능은 동일함.
+    session       : 재사용할 requests.Session. 안 넘기면(예: 이 함수를 단독으로 테스트할 때) requests 모듈 자체를 그대로 써서 매번 새 연결을 맺는 방식으로 안전하게 동작함.
+                    - 세션 재사용은 순전히 성능 최적화라 없어도 기능은 동일함.
     """
     # 1) 헤더: "나 누구인지" 증명하는 정보. API 키가 여기 들어간다.
     headers = {
@@ -221,10 +197,9 @@ def _extract_press(originallink: str) -> str:
 
     예: "https://www.yna.co.kr/view/AKR2026..." -> "yna.co.kr"
 
-    www. 제거는 .replace("www.", "") 대신 startswith 체크 후 슬라이싱을
-    쓴다 - .replace()는 문자열 어디에 있든 매칭돼서, 서브도메인 이름
-    중간에 우연히 "www."가 들어간 경우(드물지만 가능) 의도치 않게 지워질
-    수 있다. startswith는 맨 앞에 있을 때만 제거하므로 더 안전.
+    www. 제거는 .replace("www.", "") 대신 startswith 체크 후 슬라이싱을 쓴다
+    - .replace()는 문자열 어디에 있든 매칭돼서, 서브도메인 이름 중간에 우연히 "www."가 들어간 경우(드물지만 가능) 의도치 않게 지워질 수 있다.
+      startswith는 맨 앞에 있을 때만 제거하므로 더 안전.
 
     서브도메인 통합(예: biz.yna.co.kr / www.yna.co.kr을 같은 언론사로
     인식)은 하지 않는다 - 정확히 하려면 한국 도메인 특유의 복합

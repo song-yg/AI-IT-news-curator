@@ -65,7 +65,7 @@ CATEGORY_TOP_N = int(os.environ.get("CATEGORY_TOP_N") or 1)
 
 def run_collectors() -> tuple[list[dict], dict, list[str]]:
     """
-    watt/naver/gdelt collector를 순서대로 실행한다.
+    naver/gdelt collector를 순서대로 실행한다.
 
     소스별 독립 실행 구조 - 각 collector 호출을 개별 try/except로 감싸서 하나가 완전히 죽어도(예: import 실패, 예상 밖 예외) 나머지 소스는 계속 진행한다.
     각 collector 내부에도 이미 더 세밀한 단위(키워드별)의 방어가 있지만, 여기 main.py 레벨의 try/except는 "collector 모듈 자체가 통째로 실패하는 경우"에 대한 마지막 방어선이다.
