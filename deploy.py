@@ -247,8 +247,7 @@ def render_email_html(week_label: str, domestic_summarized: list[dict], internat
         )
 
     # 푸터 - AI 저작 고지(요약문이 LLM 생성이라는 점)와 자동 발송 안내를 함께 표시.
-    # "AI의 식견" 같은 종합 동향 문단은 이번 스코프에서 제외됐지만, 이슈별 요약
-    # 자체는 여전히 llm_summarizer.py가 생성하므로 이 고지는 유지.
+    # "AI의 식견" 같은 종합 동향 문단은 이번 스코프에서 제외됐지만, 이슈별 요약 자체는 여전히 llm_summarizer.py가 생성하므로 이 고지는 유지.
     body_parts.append(
         '<p style="margin-top:28px; padding-top:16px; border-top:1px solid #eee; font-size:11px; '
         'color:#aaa; text-align:center;">이 요약은 AI가 자동으로 작성했으며, 실수가 있을 수 있습니다.'
