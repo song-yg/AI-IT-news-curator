@@ -130,6 +130,12 @@ def score(articles: list[dict], model, top_n: int = TOP_N) -> tuple[list[dict], 
 
     카테고리별 Top N도 함께 계산해서 반환 - 국내/해외 각 축 안에서 scorer.score_by_category()로
     (최대 카테고리 9개 x 국내/해외 2개 = 최대 18개 리스트). N값은 CATEGORY_TOP_N으로 조정.
+
+    ** 4차 사후 재검토 **
+    국내/해외 Top N + 카테고리별 Top N 전부 issue_grouper.stage4_dedupe_and_promote로
+    사후 재검토(병합+승격)를 거친다. top_n 없는 전체 순위 풀을 넘겨서, 상위 후보끼리
+    같은 사건인지 LLM으로 한 번 더 확인 후 병합하고 빈 자리는 다음 순위로 채운다.
+    카테고리별은 scorer.score_by_category의 dedupe_fn 콜백으로 연결한다.
     """
     groups = issue_grouper.group_issues(articles, model=model)
 
@@ -156,11 +162,21 @@ def score(articles: list[dict], model, top_n: int = TOP_N) -> tuple[list[dict], 
         if international_part:
             international_groups.append(international_part)
 
-    domestic_ranked = scorer.score_and_rank(domestic_groups, top_n=top_n)
-    international_ranked = scorer.score_and_rank(international_groups, top_n=top_n)
+    domestic_ranked_pool = scorer.score_and_rank(domestic_groups, top_n=None)
+    international_ranked_pool = scorer.score_and_rank(international_groups, top_n=None)
 
-    domestic_category_ranked = scorer.score_by_category(domestic_groups, CATEGORY_TOP_N)
-    international_category_ranked = scorer.score_by_category(international_groups, CATEGORY_TOP_N)
+    domestic_ranked = issue_grouper.stage4_dedupe_and_promote(domestic_ranked_pool, top_n=top_n, label="국내")
+    international_ranked = issue_grouper.stage4_dedupe_and_promote(international_ranked_pool, top_n=top_n, label="해외")
+
+    def _category_dedupe_fn(axis_label: str):
+        def _fn(ranked_pool, n, category):
+            return issue_grouper.stage4_dedupe_and_promote(ranked_pool, top_n=n, label=f"{axis_label}-{category}")
+        return _fn
+
+    domestic_category_ranked = scorer.score_by_category(
+        domestic_groups, CATEGORY_TOP_N, dedupe_fn=_category_dedupe_fn("국내"))
+    international_category_ranked = scorer.score_by_category(
+        international_groups, CATEGORY_TOP_N, dedupe_fn=_category_dedupe_fn("해외"))
 
     return domestic_ranked, international_ranked, domestic_category_ranked, international_category_ranked
 

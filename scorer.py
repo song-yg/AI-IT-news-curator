@@ -186,13 +186,19 @@ def _majority_category(group: list[dict]) -> str:
 
 
 def score_by_category(groups: list[list[dict]], top_n: int,
-                       exclude: tuple[str, ...] = ("기타",)) -> dict[str, list[dict]]:
+                       exclude: tuple[str, ...] = ("기타",),
+                       dedupe_fn=None) -> dict[str, list[dict]]:
     """
     카테고리별 Top N. 국내/해외 축과 독립적인 카테고리 축을 만들되 국내/해외 구분은 유지.
     이 함수는 domestic_groups/international_groups 중 하나를 받아 그 축 안에서만 카테고리별로 나눈다 (main.py가 국내용/해외용으로 각각 호출).
 
     "기타"는 기본 제외 (카테고리별 Top N의 목적과 성격이 다름).
     이슈 없는 카테고리는 결과 dict에 키 자체가 안 남음 (빈 리스트를 안 만들어서 "이슈 없음"과 "카테고리 자체 없음"을 구분할 필요를 없앰).
+
+    dedupe_fn: 넘기면 카테고리별 전체 순위 풀을 dedupe_fn(전체_풀, top_n, category)에
+    태워 그 결과를 씀(issue_grouper.stage4_dedupe_and_promote 용도). scorer.py는
+    issue_grouper를 import 안 하므로(순환 참조) 콜백 방식. None이면 기존처럼
+    score_and_rank(top_n=top_n)로 바로 자른다.
     """
     by_category: dict[str, list[list[dict]]] = defaultdict(list)
     for group in groups:
@@ -203,7 +209,11 @@ def score_by_category(groups: list[list[dict]], top_n: int,
 
     result = {}
     for category, cat_groups in by_category.items():
-        ranked = score_and_rank(cat_groups, top_n=top_n)
+        if dedupe_fn is not None:
+            full_pool = score_and_rank(cat_groups, top_n=None)
+            ranked = dedupe_fn(full_pool, top_n, category)
+        else:
+            ranked = score_and_rank(cat_groups, top_n=top_n)
         if ranked:
             # 이후 단계에서 여러 카테고리 결과를 평평한 리스트로 합칠 때 원래 카테고리를 추적할 수 있도록 항목 자체에 남겨둠
             for item in ranked:

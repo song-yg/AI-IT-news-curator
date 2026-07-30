@@ -9,6 +9,9 @@ GitHub Secrets에서 읽음: SMTP_USER(발신 Gmail), SMTP_APP_PASSWORD(앱 비�
 ** 콘텐츠 구성 **
 storage.py가 만든 domestic/international_summarized·by_category(scored.json과 동일 데이터)를 받아 summary.md와 같은 구조로 HTML 렌더링.
 이메일 클라이언트는 외부 스타일시트를 지원 안 하는 경우가 많아 인라인 스타일만 사용.
+폭 1000px, 옅은 회색 배경 위 흰색 콘텐츠 카드, 국내/해외를 좌우 2단(table 기반)으로 배치한다
+(사료·축산업 뉴스 큐레이션 시스템과 레이아웃 통일 - flexbox/grid 대신 table을 쓰는 이유도 동일:
+이메일 클라이언트, 특히 구형 Outlook은 flex/grid 지원이 들쭉날쭉해도 table은 안정적으로 지원됨).
 
 ** Outlook 렌더링 **
 border-radius는 아웃룩 데스크톱(Word 렌더링 엔진)에서 무시되고 각진 사각형으로 보인다.
@@ -34,6 +37,8 @@ DOMESTIC_ACCENT = "#1a73e8"
 INTERNATIONAL_ACCENT = "#7c3aed"
 DOMESTIC_PILL_BG = "#e8f0fe"
 INTERNATIONAL_PILL_BG = "#f3ebfd"
+
+HEADER_BG = "#0f2f5c"
 
 
 def _escape(value) -> str:
@@ -69,7 +74,6 @@ def _format_issue_html(item: dict, rank: int | None = None, accent: str = DOMEST
     """
     titles = item.get("titles", [])
     rep_title = titles[0] if titles else "(제목 없음)"
-    extra = f" (그룹 내 추가 {len(titles) - 1}건 생략)" if len(titles) > 1 else ""
     rank_html = ""
     if rank is not None:
         rank_html = (
@@ -77,6 +81,11 @@ def _format_issue_html(item: dict, rank: int | None = None, accent: str = DOMEST
             f'text-align:center; border-radius:50%; background:{accent}; color:#fff; font-size:11px; '
             f'font-weight:bold; margin-right:6px;">{rank}</span>'
         )
+
+    extra_html = ""
+    if len(titles) > 1:
+        extra_html = (f'<p style="margin:2px 0 4px 0; font-size:11px; color:#aaa;">'
+                      f'(총 {len(titles)}건 기사를 종합)</p>')
 
     cross_html = ""
     if item.get("cross_axis_partner"):
@@ -101,7 +110,7 @@ def _format_issue_html(item: dict, rank: int | None = None, accent: str = DOMEST
     return f"""
     <div style="margin-bottom:12px; padding:12px 14px; border:1px solid #eee; border-radius:8px; background:#fff;">
       <p style="margin:0; font-weight:bold; font-size:14px; color:#111;">{rank_html}{_escape(rep_title)}</p>
-      <p style="margin:2px 0 4px 0; font-size:12px; color:#aaa;">점수 {item.get('issue_score', 0):.2f} / 언급 {item.get('mention_count', 0)}건{extra}</p>
+      {extra_html}
       {cross_html}
       {body_html}
       {links_html}
@@ -110,6 +119,7 @@ def _format_issue_html(item: dict, rank: int | None = None, accent: str = DOMEST
 
 
 def _format_section_html(title: str, items: list[dict], accent: str = DOMESTIC_ACCENT) -> str:
+    """축 색상 컬러바가 붙은 섹션 제목 + 순위 매긴 이슈 카드들."""
     header = (f'<h3 style="font-size:16px; color:#222; margin:20px 0 10px 0; padding-left:10px; '
               f'border-left:4px solid {accent};">{_escape(title)}</h3>')
     if not items:
@@ -121,62 +131,63 @@ def _format_section_html(title: str, items: list[dict], accent: str = DOMESTIC_A
 
 def _format_category_html(label: str, by_category: dict[str, list[dict]],
                            accent: str = DOMESTIC_ACCENT, pill_bg: str = DOMESTIC_PILL_BG) -> str:
+    """카테고리별 Top N. 카테고리마다 알약 태그 + 그 안에서 1부터 순위 매김."""
     if not by_category:
         return ""
-    header = (f'<h3 style="font-size:16px; color:#222; margin:24px 0 8px 0; padding-left:10px; '
-              f'border-left:4px solid {accent};">{_escape(label)} - 카테고리별 Top N</h3>')
     blocks = []
     for category, items in by_category.items():
         blocks.append(
-            f'<div><span style="display:inline-block; padding:3px 12px; border-radius:12px; '
-            f'background:{pill_bg}; color:{accent}; font-size:12px; font-weight:bold; '
+            f'<div><span style="display:inline-block; padding:4px 14px; border-radius:14px; '
+            f'background:{pill_bg}; color:{accent}; font-size:15px; font-weight:bold; '
             f'margin:14px 0 8px 0;">{_escape(category)}</span></div>'
         )
         # 카테고리별 별도 Top N이라 전체 순위가 아니라 카테고리 안에서 1부터 다시 매김
         blocks.append("".join(_format_issue_html(item, rank=i, accent=accent) for i, item in enumerate(items, start=1)))
+    header = (f'<h3 style="font-size:16px; color:#222; margin:24px 0 8px 0; padding-left:10px; '
+              f'border-left:4px solid {accent};">{_escape(label)}</h3>')
     return header + "".join(blocks)
 
 
-def _format_category_comparison_html(category_comparison: dict[str, dict[str, dict]] | None) -> str:
-    """
-    지난주 대비 증감을 이메일 상단에 <table>로 표시 (storage._format_category_comparison_section과 같은 정보, 렌더링만 표 형식).
-    <table>을 쓰는 이유: 이메일 클라이언트(특히 아웃룩)는 flex/grid 지원이 들쭉날쭉해도 표는 안정적으로 지원됨.
-    """
-    if not category_comparison:
-        return ""
-    blocks = ['<h3 style="font-size:16px; color:#222; margin:20px 0 10px 0;">카테고리별 지난주 대비 증감</h3>']
-    axis_colors = {"국내": DOMESTIC_ACCENT, "해외": INTERNATIONAL_ACCENT}
-    for axis in ("국내", "해외"):
-        axis_data = category_comparison.get(axis, {})
-        if not axis_data:
-            continue
-        accent = axis_colors[axis]
-        rows = []
-        for category, values in axis_data.items():
-            delta = values["delta"]
-            sign = "+" if delta >= 0 else ""
-            color = "#1a7f37" if delta > 0 else ("#c0392b" if delta < 0 else "#888")
-            rows.append(
-                '<tr>'
-                f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px;">{_escape(category)}</td>'
-                f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px; text-align:right;">{values["this_week"]}건</td>'
-                f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px; text-align:right; color:#999;">{values["last_week"]}건</td>'
-                f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px; text-align:right; color:{color}; font-weight:bold;">{sign}{delta}</td>'
-                '</tr>'
-            )
-        blocks.append(f'<p style="margin:10px 0 4px 0; font-weight:bold; font-size:13px; color:{accent};">{axis}</p>')
-        blocks.append(
-            '<table style="width:100%; border-collapse:collapse; margin-bottom:8px;">'
-            '<tr style="background:#fafafa;">'
-            '<th style="text-align:left; padding:6px 8px; font-size:11px; color:#888;">카테고리</th>'
-            '<th style="text-align:right; padding:6px 8px; font-size:11px; color:#888;">이번 주</th>'
-            '<th style="text-align:right; padding:6px 8px; font-size:11px; color:#888;">지난주</th>'
-            '<th style="text-align:right; padding:6px 8px; font-size:11px; color:#888;">증감</th>'
+def _format_category_comparison_axis_html(axis_data: dict[str, dict] | None, accent: str) -> str:
+    """카테고리별 지난주 대비 증감 표(축 하나 분량). 2단 레이아웃에서 좌우 배치용."""
+    if not axis_data:
+        return '<p style="font-size:13px; color:#999; margin:4px 0;">(비교할 지난주 데이터 없음)</p>'
+    rows = []
+    for category, values in axis_data.items():
+        delta = values["delta"]
+        sign = "+" if delta >= 0 else ""
+        color = "#1a7f37" if delta > 0 else ("#c0392b" if delta < 0 else "#888")
+        rows.append(
+            '<tr>'
+            f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px;">{_escape(category)}</td>'
+            f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px; text-align:right;">{values["this_week"]}건</td>'
+            f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px; text-align:right; color:#999;">{values["last_week"]}건</td>'
+            f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px; text-align:right; color:{color}; font-weight:bold;">{sign}{delta}</td>'
             '</tr>'
-            + "".join(rows) +
-            '</table>'
         )
-    return "".join(blocks)
+    return (
+        '<table style="width:100%; border-collapse:collapse;">'
+        '<tr style="background:#fafafa;">'
+        '<th style="text-align:left; padding:6px 8px; font-size:11px; color:#888;">카테고리</th>'
+        '<th style="text-align:right; padding:6px 8px; font-size:11px; color:#888;">이번 주</th>'
+        '<th style="text-align:right; padding:6px 8px; font-size:11px; color:#888;">지난주</th>'
+        '<th style="text-align:right; padding:6px 8px; font-size:11px; color:#888;">증감</th>'
+        '</tr>'
+        + "".join(rows) +
+        '</table>'
+    )
+
+
+def _two_column_table(left_html: str, right_html: str) -> str:
+    """국내/해외 두 블록을 좌우로 배치. flexbox/grid 대신 table 사용(구형 Outlook 호환)."""
+    return f"""
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%; border-collapse:collapse; table-layout:fixed;">
+      <tr>
+        <td width="50%" valign="top" style="padding-right:14px;">{left_html}</td>
+        <td width="50%" valign="top" style="padding-left:14px;">{right_html}</td>
+      </tr>
+    </table>
+    """
 
 
 def render_email_html(week_label: str, domestic_summarized: list[dict], international_summarized: list[dict],
@@ -185,48 +196,66 @@ def render_email_html(week_label: str, domestic_summarized: list[dict], internat
                        failed_sources: list[str],
                        category_comparison: dict[str, dict[str, dict]] | None = None) -> str:
     """
-    scored.json과 동일한 데이터로 이메일 본문(HTML)을 만든다. summary.md와 정보량은 같고 렌더링만 헤더 배너 + 카드형 HTML로 다르다.
-    category_comparison이 있으면 제목 바로 아래 배치 (summary.md와 동일한 배치 원칙).
+    scored.json 데이터로 이메일 본문 HTML 생성. 폭 1000px, 옅은 회색 배경 위
+    흰색 콘텐츠 카드, 국내/해외 좌우 2단 레이아웃.
     """
-    week_label_human = _humanize_week_label(week_label)
+    header_html = f"""
+    <div style="background:{HEADER_BG}; padding:26px 32px; border-radius:10px 10px 0 0;">
+      <p style="margin:0; font-size:11px; letter-spacing:2px; color:#9fc0ff; font-weight:bold;">NEWSLETTER</p>
+      <h1 style="margin:6px 0 0 0; font-size:22px; color:#fff; font-weight:bold;">AI·IT 뉴스 큐레이션</h1>
+      <p style="margin:5px 0 0 0; font-size:13px; color:#c9dcff;">{_escape(_humanize_week_label(week_label))}</p>
+    </div>
+    """
 
-    body_parts = [
-        _format_category_comparison_html(category_comparison),
-        _format_section_html("국내", domestic_summarized, accent=DOMESTIC_ACCENT),
-        _format_category_html("국내", domestic_by_category, accent=DOMESTIC_ACCENT, pill_bg=DOMESTIC_PILL_BG),
-        _format_section_html("해외", international_summarized, accent=INTERNATIONAL_ACCENT),
-        _format_category_html("해외", international_by_category, accent=INTERNATIONAL_ACCENT, pill_bg=INTERNATIONAL_PILL_BG),
+    section_header = lambda text: f'<h2 style="font-size:18px; color:#111; margin:26px 0 12px 0;">{_escape(text)}</h2>'
+
+    parts = [
+        '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Arial, sans-serif; '
+        'background:#f2f4f7; padding:24px 0;">',
+        '<div style="max-width:1000px; margin:0 auto; background:#fff; border-radius:10px; '
+        'overflow:hidden; border:1px solid #e5e5e5;">',
+        header_html,
+        '<div style="padding:24px 32px; color:#333;">',
     ]
 
+    if category_comparison:
+        parts.append(section_header("카테고리별 지난주 대비 증감"))
+        parts.append(_two_column_table(
+            _format_category_comparison_axis_html(category_comparison.get("국내"), DOMESTIC_ACCENT),
+            _format_category_comparison_axis_html(category_comparison.get("해외"), INTERNATIONAL_ACCENT),
+        ))
+
+    parts.append(section_header("주간 Top 이슈"))
+    parts.append(_two_column_table(
+        _format_section_html("국내", domestic_summarized, accent=DOMESTIC_ACCENT),
+        _format_section_html("해외", international_summarized, accent=INTERNATIONAL_ACCENT),
+    ))
+
+    parts.append(section_header("카테고리별 Top N"))
+    parts.append(_two_column_table(
+        _format_category_html("국내", domestic_by_category, accent=DOMESTIC_ACCENT, pill_bg=DOMESTIC_PILL_BG),
+        _format_category_html("해외", international_by_category, accent=INTERNATIONAL_ACCENT, pill_bg=INTERNATIONAL_PILL_BG),
+    ))
+
     if failed_sources:
-        body_parts.append(
+        parts.append(
             f'<p style="margin-top:24px; font-size:12px; color:#c0392b;">'
             f'참고 - 이번 실행에서 실패한 소스: {_escape(", ".join(failed_sources))}</p>'
         )
 
     # 푸터 - AI 저작 고지 + 자동 발송 안내
-    body_parts.append(
-        '<p style="margin-top:28px; padding-top:16px; border-top:1px solid #eee; font-size:11px; '
-        'color:#aaa; text-align:center;">이 요약은 AI가 자동으로 작성했으며, 실수가 있을 수 있습니다.'
-        '<br>이 메일은 AI·IT 뉴스 큐레이션 시스템이 매주 자동으로 발송합니다.</p>'
+    parts.append(
+        '<p style="margin-top:28px; padding-top:16px; border-top:1px solid #eee; '
+        'font-size:11px; color:#aaa; text-align:center;">'
+        '이 메일은 AI·IT 뉴스 큐레이션 시스템이 매주 자동으로 발송합니다.<br>'
+        '이 요약은 AI가 자동으로 작성했으며, 실수가 있을 수 있습니다. '
+        '정확한 내용은 원문 링크를 확인해주세요.</p>'
     )
 
-    return (
-        '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Arial, sans-serif; '
-        'background:#f2f4f7; padding:24px 0;">'
-        '<div style="max-width:640px; margin:0 auto; background:#fff; border-radius:10px; '
-        'overflow:hidden; border:1px solid #e5e5e5;">'
-        '<div style="background:#0f2f5c; padding:26px 28px; border-radius:10px 10px 0 0;">'
-        '<p style="margin:0; font-size:11px; letter-spacing:2px; color:#9fc0ff; font-weight:bold;">NEWSLETTER</p>'
-        '<h1 style="margin:6px 0 0 0; font-size:21px; color:#fff; font-weight:bold;">AI·IT 뉴스 큐레이션</h1>'
-        f'<p style="margin:5px 0 0 0; font-size:13px; color:#c9dcff;">{_escape(week_label_human)}</p>'
-        '</div>'
-        '<div style="padding:24px 28px; color:#333;">'
-        + "".join(body_parts) +
-        '</div>'
-        '</div>'
-        '</div>'
-    )
+    parts.append('</div>')
+    parts.append('</div>')
+    parts.append('</div>')
+    return "".join(parts)
 
 
 def send_email(html_content: str, subject: str, recipients: list[str],

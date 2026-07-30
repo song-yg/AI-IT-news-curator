@@ -4,8 +4,13 @@ issue_grouper.py
   1차 - KR<->EN 키워드 사전 매칭
   2차 - BGE-M3 임베딩 코사인 유사도
   3차 - LLM 그룹핑 보조 (임계값 애매 구간)
+  4차 - Top N 사후 재검토(stage4_dedupe_and_promote) - 최종 순위권 후보끼리만
+        LLM으로 한 번 더 같은 사건인지 확인해 병합하고, 빈 자리는 다음 순위로 승격
 
 group_issues()가 1~3차를 순서대로 실행해 최종 그룹 리스트를 만든다.
+4차는 그룹핑이 아니라 스코어링 이후 단계라 group_issues()에는 안 들어있고, main.py가
+score() 안에서 국내/해외 Top N과 카테고리별 Top N 각각에 stage4_dedupe_and_promote를
+직접 호출한다.
 """
 
 import csv
@@ -14,6 +19,8 @@ import os
 from itertools import combinations
 
 import requests
+
+import scorer  # 4차 병합 그룹 재스코어링용
 
 from keyword_tagger import EXCLUDED_TERMS
 
@@ -688,3 +695,174 @@ def _merge_confirmed_components(components: list[list[dict]],
                 merged_components.append(components[idx])
 
     return merged_components
+
+
+# ---------------------------------------------------------------------------
+# 4차: Top N 사후 재검토 + 병합 + 순위 승격
+# ---------------------------------------------------------------------------
+# Top N 후보끼리만 다시 "같은 사건인지" LLM 확인 후 병합, 빈 자리는 다음 순위로 승격.
+# 3차와 판정 기준이 다름 - "시점이 달라도 같은 발병의 후속 보도면 같은 사건"으로 처리.
+_STAGE4_SYSTEM_PROMPT = (
+    "You are a judge that assists final de-duplication of a news issue "
+    "ranking. Given two issue summaries (each made of one or more article "
+    "titles about the same underlying story), decide whether they are "
+    "actually reporting on the same real-world event or outbreak, even if "
+    "worded very differently or reported on different days. "
+    "Judge them as the SAME event if they describe the same disease "
+    "outbreak or incident continuing, escalating, or being confirmed over "
+    "time in the same country/region (e.g. an initial suspected-case "
+    "report and a later article confirming wider spread of that same "
+    "outbreak are the SAME event, even though the specific facts and "
+    "wording changed as the story developed). "
+    "Judge them as separate events if the country/region differs, or if "
+    "they are genuinely unrelated incidents (different disease, different "
+    "outbreak) that merely share a topic. "
+    "When genuinely unsure, prefer NOT merging (same_event: false) - a "
+    "missed merge is safer than an incorrect one. "
+    "Output only a JSON array with no other explanation. Each element must "
+    "be in the form {\"id\": number, \"same_event\": true|false}, and id "
+    "must exactly match the number of the input pair."
+)
+
+
+def _build_stage4_user_prompt(pairs: list[tuple[dict, dict]]) -> str:
+    """item(그룹)당 대표 제목 최대 5개를 A/B로 나열해 같은 사건인지 판정 요청."""
+    lines = ["Judge whether each of the following pairs of issue summaries covers the same real-world event.\n"]
+    for idx, (item_a, item_b) in enumerate(pairs, start=1):
+        titles_a = " / ".join(item_a.get("titles", [])[:5]) or "(제목 없음)"
+        titles_b = " / ".join(item_b.get("titles", [])[:5]) or "(제목 없음)"
+        lines.append(f'{idx}. A: "{titles_a}" / B: "{titles_b}"')
+    lines.append(
+        f'\nThere are {len(pairs)} pairs total. Include the number above as "id" in each '
+        f'element and answer with a JSON array only (e.g. [{{"id": 1, "same_event": true}}, '
+        f'{{"id": 2, "same_event": false}}, ...]). Do not omit any id or change the order.'
+    )
+    return "\n".join(lines)
+
+
+def _call_stage4_llm_batch(pairs: list[tuple[dict, dict]], api_key: str,
+                            session: requests.Session) -> list[bool] | None:
+    """단일 배치 호출 - _call_llm과 동일한 파싱/부분 복구 패턴. 배치 전체 실패 시 None."""
+    user_prompt = _build_stage4_user_prompt(pairs)
+
+    def _validate(text: str, is_final: bool) -> list:
+        cleaned = text
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("```")[1]
+            cleaned = cleaned[4:] if cleaned.startswith("json") else cleaned
+        parsed = json.loads(cleaned.strip())
+        if not isinstance(parsed, list) or not parsed:
+            actual = len(parsed) if isinstance(parsed, list) else type(parsed).__name__
+            raise ValueError(f"리스트가 아니거나 비어있음(실제 {actual}) | 실제 응답: {_snippet_for_log(text)}")
+        return parsed
+
+    try:
+        parsed = _request_llm_text(_STAGE4_SYSTEM_PROMPT, user_prompt, api_key, session, validate=_validate)
+    except Exception as e:
+        print(f"[issue_grouper] 🔴 조치필요 [IG-11] - 4차 재검토 LLM({LLM_PROVIDER}) 호출/파싱 실패 - "
+              f"이 배치({len(pairs)}쌍)는 전부 '병합 안 함' fallback: {type(e).__name__} - {e!r}")
+        return None
+
+    by_id: dict[int, bool] = {}
+    for item in parsed:
+        try:
+            by_id[int(item["id"])] = bool(item["same_event"])
+        except (KeyError, TypeError, ValueError):
+            continue
+
+    results = []
+    missing = []
+    for idx in range(1, len(pairs) + 1):
+        if idx in by_id:
+            results.append(by_id[idx])
+        else:
+            missing.append(idx)
+            results.append(False)  # 안전한 기본값 - 병합 안 함
+
+    if missing:
+        print(f"[issue_grouper] 🟡 주의 [IG-12] - 4차 재검토 LLM({LLM_PROVIDER}) 출력에서 id {missing} 누락"
+              f"(기대 {len(pairs)}쌍 중 {len(missing)}쌍) - 그 쌍들만 '병합 안 함' 기본값 처리")
+
+    return results
+
+
+def _call_stage4_llm(pairs: list[tuple[dict, dict]], api_key: str, session: requests.Session) -> list[bool]:
+    """LLM_BATCH_SIZE 단위로 배치 호출 후 결과 병합. 배치 실패분은 False(병합 안 함)로 채움."""
+    results: list[bool] = []
+    for i in range(0, len(pairs), LLM_BATCH_SIZE):
+        batch = pairs[i:i + LLM_BATCH_SIZE]
+        batch_results = _call_stage4_llm_batch(batch, api_key, session)
+        results.extend(batch_results if batch_results is not None else [False] * len(batch))
+    return results
+
+
+def stage4_dedupe_and_promote(ranked_pool: list[dict], top_n: int, label: str = "") -> list[dict]:
+    """
+    ranked_pool(top_n 제한 없는 전체 순위 풀) 상위 top_n을 후보로 삼아 같은
+    사건 쌍을 LLM으로 재확인, 병합하고 빈 자리는 다음 순위로 채운다.
+    회차당 병합 1건만 적용 후 재판단, 최대 3회. API 키 없으면 기존 순위 그대로 반환.
+    반환값은 scorer.score_and_rank(top_n=N)과 동일한 형태.
+    """
+    if top_n is None:
+        top_n = len(ranked_pool)
+    candidates = list(ranked_pool[:top_n])
+    reserve = list(ranked_pool[top_n:])  # 승격 후보 풀 - 이미 점수순 정렬된 상태 유지
+
+    if len(candidates) < 2:
+        return candidates
+
+    key_env_var = "OPENROUTER_API_KEY" if LLM_PROVIDER == "openrouter" else "ANTHROPIC_API_KEY"
+    api_key = os.environ.get(key_env_var)
+    if not api_key:
+        print(f"[issue_grouper] 🟡 주의 [IG-13] - {key_env_var} 없음(LLM_PROVIDER={LLM_PROVIDER}) - "
+              f"4차 Top N 재검토 생략(기존 순위 그대로 사용)")
+        return candidates
+
+    prefix = f"[issue_grouper] {label} " if label else "[issue_grouper] "
+    max_rounds = 3
+    merged_any = False
+
+    with requests.Session() as session:
+        for round_idx in range(1, max_rounds + 1):
+            if len(candidates) < 2:
+                break
+
+            index_pairs = list(combinations(range(len(candidates)), 2))
+            llm_pairs = [(candidates[i], candidates[j]) for i, j in index_pairs]
+            print(f"{prefix}4차 Top N 재검토 {round_idx}회차 - 후보 {len(candidates)}건({len(index_pairs)}쌍) 확인")
+            results = _call_stage4_llm(llm_pairs, api_key, session)
+
+            merge_at = next((k for k, same in enumerate(results) if same), None)
+            if merge_at is None:
+                break  # 이번 회차에 병합할 쌍 없음 - 더 볼 것 없으니 종료
+
+            i, j = index_pairs[merge_at]
+            item_a, item_b = candidates[i], candidates[j]
+            rep_a = item_a["titles"][0] if item_a.get("titles") else "(제목 없음)"
+            rep_b = item_b["titles"][0] if item_b.get("titles") else "(제목 없음)"
+            print(f"{prefix}🔗 같은 사건으로 판정돼 병합: '{rep_a}' + '{rep_b}'")
+
+            merged_articles = item_a.get("articles", []) + item_b.get("articles", [])
+            merged_item = scorer.score_group(merged_articles)
+            merged_any = True
+
+            candidates = [c for k, c in enumerate(candidates) if k not in (i, j)]
+            candidates.append(merged_item)
+
+            if reserve:
+                promoted = reserve.pop(0)
+                rep_p = promoted["titles"][0] if promoted.get("titles") else "(제목 없음)"
+                print(f"{prefix}⬆️ 빈 자리에 다음 순위 후보 승격: '{rep_p}'")
+                candidates.append(promoted)
+
+            candidates.sort(key=lambda c: c["issue_score"], reverse=True)
+            candidates = candidates[:top_n]
+        else:
+            print(f"{prefix}🟡 주의 - 4차 재검토가 최대 {max_rounds}회 한도에 도달함 - "
+                  f"남은 중복이 더 있을 수 있음(다음 실행에서 다시 확인됨)")
+
+    if merged_any:
+        print(f"{prefix}4차 Top N 재검토 완료 - 최종 {len(candidates)}건")
+
+    return candidates
+
