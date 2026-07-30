@@ -611,11 +611,6 @@ def _collect_articles_for_keyword(gd: "GdeltDoc", keyword: str) -> tuple[bool, l
     성공 여부는 article_search 호출 자체가 예외 없이 끝났는지 기준 (기사가
     0건이어도 호출 자체가 정상이면 True - 그 키워드는 그냥 최근 기사가 없는
     것이므로 재시도 대상이 아님).
-
-    ** collect()의 정식 실행 경로에서는 더 이상 안 씀 **: 요청 횟수를
-    줄이려고 아래 _collect_articles_for_keywords(복수형, OR 결합)로
-    교체됨. 이 단수형 함수는 키워드 하나만 따로 확인해보고 싶은
-    진단/디버깅 용도로 남겨둠 - 삭제하지 않음.
     """
     f = Filters(keyword=keyword, timespan=TIMESPAN, num_records=MAX_RECORDS)
     keyword_articles = []
@@ -653,10 +648,9 @@ def _collect_articles_for_keyword(gd: "GdeltDoc", keyword: str) -> tuple[bool, l
                     "category": None,   # 정제 단계에서 채움 (naver_collector와 동일 방침)
                     "body": None,        # GDELT는 본문 미제공 (스펙에 명시된 그대로)
                     "press": _extract_domain(row["url"]),  # naver의 press 필드와 동일 목적
-                    # 언어/국가 분포 진단용. gdeltdoc이 원래 반환하는
-                    # 필드인데 지금까지 받아만 놓고 안 쓰고 있었음.
+                    # 언어/국가 분포 진단용.
                     # GDELT 공식 문서 확인 - JSON/article_search 모드에서는 title이 번역 없이 원문 그대로 옴 (TRANS 옵션은 HTML 모드 전용 위젯이라 여기 안 해당).
-                    # 즉 이 title 값은 중국어/독일어 등 원문 스크립트 그대로일 수 있음. (12번 언어처리방침에서 다뤄야 할 지점.)
+                    # 즉 이 title 값은 중국어/독일어 등 원문 스크립트 그대로일 수 있음.
                     "language": row.get("language", ""),
                     "sourcecountry": row.get("sourcecountry", ""),
                 })
@@ -667,20 +661,16 @@ def _collect_articles_for_keyword(gd: "GdeltDoc", keyword: str) -> tuple[bool, l
         return True, keyword_articles, None
 
     except ValueError as e:
-        # 쿼리 자체가 거부된 경우(예: "phrase too short")는 시간이 지나도
-        # 안 풀리는 확정적 실패라, 학습형 스킵 목록
-        # (_update_skip_state_after_run 참고)의 대상이 됨 - 여기서 발생
-        # 시점에 바로 기록해둔다. 일반 Exception과 구분해서 잡는 이유는
-        # 네트워크 오류 같은 일시적 실패까지 "이 키워드가 문제"로 학습되면
-        # 안 되기 때문(오탐 방지).
+        # 쿼리 자체가 거부된 경우(예: "phrase too short")는 시간이 지나도 안 풀리는 확정적 실패라, 학습형 스킵 목록 (_update_skip_state_after_run 참고)의 대상이 됨
+        #  - 여기서 발생 시점에 바로 기록해둔다.
+        # 일반 Exception과 구분해서 잡는 이유는# 네트워크 오류 같은 일시적 실패까지 "이 키워드가 문제"로 학습되면 안 되기 때문(오탐 방지).
         print(f"[gdelt] 🟡 주의 [GD-05] - '{keyword}' article_search 실패(쿼리 자체 거부로 추정 - "
               f"{type(e).__name__}: {e})")
         _value_error_keywords_this_run.append(keyword)
         return False, [], f"{type(e).__name__}: {e}"
 
     except Exception as e:
-        # 기사 수집 자체가 실패한 경우 - 호출부(collect())가 이 키워드를
-        # failed_keywords에 담아 외부 재시도 라운드로 넘긴다.
+        # 기사 수집 자체가 실패한 경우 - 호출부(collect())가 이 키워드를 failed_keywords에 담아 외부 재시도 라운드로 넘긴다.
         print(f"[gdelt] 🟡 주의 [GD-06] - '{keyword}' article_search 실패: {type(e).__name__} - {e!r}")
         return False, [], f"{type(e).__name__}: {e}"
 
@@ -694,12 +684,10 @@ def _collect_articles_for_keywords(gd: "GdeltDoc", keywords: list[str]) -> tuple
 
     collect()의 외부 재시도 로직이 그대로 재사용되도록, 단수형 _collect_articles_for_keyword와 동일한 반환 형태(성공 여부, 기사 리스트)  유지한다.
 
-    ** 오매칭 필터를 여러 키워드에 걸쳐 확인 **: OR로 묶으면 반환된 기사
-    하나가 정확히 어느 키워드에 매칭돼서 나온 건지 API가 알려주지 않는다.
-    그래서 keywords에 포함된 키워드 전부의 FALSE_POSITIVE_FILTERS 패턴을
-    모아 확인한다 - 오매칭 자체가 "부분 문자열 포함 매칭" 때문에 생기는
-    구조적 문제라, 어떤 키워드가 트리거했든 같은 필터를 적용하는 게
-    자연스럽다(위 FALSE_POSITIVE_FILTERS 섹션 설명 참고).
+    ** 오매칭 필터를 여러 키워드에 걸쳐 확인 **:
+    OR로 묶으면 반환된 기사 하나가 정확히 어느 키워드에 매칭돼서 나온 건지 API가 알려주지 않는다.
+    그래서 keywords에 포함된 키워드 전부의 FALSE_POSITIVE_FILTERS 패턴을 모아 확인한다.
+      - 오매칭 자체가 "부분 문자열 포함 매칭" 때문에 생기는 구조적 문제라, 어떤 키워드가 트리거했든 같은 필터를 적용하는 게 자연스럽다.
     """
     label = " OR ".join(keywords)
     f = Filters(keyword=keywords, timespan=TIMESPAN, num_records=MAX_RECORDS)
@@ -758,15 +746,9 @@ def _collect_articles_for_keywords(gd: "GdeltDoc", keywords: list[str]) -> tuple
         return True, combined_articles
 
     except ValueError as e:
-        # "phrase too short" 등 GDELT가 쿼리 자체를 거부하는 에러
-        # (RateLimitError/네트워크 에러와 달리 시간이 지나도 절대 안 풀림)는
-        # 결합 쿼리 안에 문제 키워드가 "섞여 있는 한" 재시도해도 100% 같은
-        # 이유로 또 실패한다 - collect()의 외부 재시도 로직은 원래 429처럼
-        # "시간이 지나면 풀리는 실패"를 염두에 두고 만든 거라, 이 경우엔
-        # 재시도를 그대로 낭비하고 결국 GDELT 기사 전체가 0건으로 끝나버릴
-        # 수 있다(키워드를 OR로 합친 구조에서 생기는 위험 - 개별 요청이면
-        # 문제 키워드 하나만 실패로 끝났을 것). 재시도 대신 그 즉시 키워드별
-        # 개별 요청으로 내려가서 문제 키워드만 격리하고, 나머지는 정상적으로 살린다.
+        # "phrase too short" 등 GDELT가 쿼리 자체를 거부하는 에러 (RateLimitError/네트워크 에러와 달리 시간이 지나도 절대 안 풀림)는 결합 쿼리 안에 문제 키워드가 "섞여 있는 한" 재시도해도 100% 같은 이유로 또 실패한다.
+        #  - collect()의 외부 재시도 로직은 원래 429처럼 "시간이 지나면 풀리는 실패"를 염두에 두고 만든 거라, 이 경우엔 재시도를 그대로 낭비하고 결국 GDELT 기사 전체가 0건으로 끝나버릴 수 있다(키워드를 OR로 합친 구조에서 생기는 위험 - 개별 요청이면 문제 키워드 하나만 실패로 끝났을 것).
+        # 재시도 대신 그 즉시 키워드별 개별 요청으로 내려가서 문제 키워드만 격리하고, 나머지는 정상적으로 살린다.
         print(f"[gdelt] 🟡 주의 [GD-08] - '{label}' article_search 실패(쿼리 자체 거부로 추정 - "
               f"{type(e).__name__}: {e}) - 재시도 대신 키워드별 개별 요청으로 즉시 전환")
         return _collect_articles_individually(gd, keywords)
@@ -778,13 +760,12 @@ def _collect_articles_for_keywords(gd: "GdeltDoc", keywords: list[str]) -> tuple
 
 def _collect_articles_individually(gd: "GdeltDoc", keywords: list[str]) -> tuple[bool, list[dict]]:
     """
-    결합 쿼리(_collect_articles_for_keywords)가 "phrase too short"류 - 재시도로
-    해결 안 되는 - 에러로 실패했을 때 호출되는 격리 폴백.
+    결합 쿼리(_collect_articles_for_keywords)가 "phrase too short"류
+      - 재시도로 해결 안 되는
+      - 에러로 실패했을 때 호출되는 격리 폴백.
 
-    키워드를 하나씩 따로 요청해서(기존 _collect_articles_for_keyword 재사용)
-    문제 있는 키워드만 그 자리에서 실패로 남기고, 나머지는 정상적으로
-    결과에 포함시킨다 - 결합 요청 방식이 가진 "하나가 전체를 잠식하는"
-    위험을 이 경로에서만 다시 키워드 1개 단위로 좁혀서 상쇄한다.
+    키워드를 하나씩 따로 요청해서(기존 _collect_articles_for_keyword 재사용) 문제 있는 키워드만 그 자리에서 실패로 남기고, 나머지는 정상적으로 결과에 포함시킨다.
+      - 결합 요청 방식이 가진 "하나가 전체를 잠식하는" 위험을 이 경로에서만 다시 키워드 1개 단위로 좁혀서 상쇄한다.
 
     구글 시트(keyword_source.py)로 키워드를 등록하는 구조라, 사람이
     모르는 사이 짧은 영문 키워드가 추가돼 이 상황이 발생할 수 있다 - 이
@@ -808,12 +789,9 @@ def _detect_crowded_keywords(articles: list[dict], keywords: list[str]) -> list[
     반환값: "크라우딩을 일으킨 것으로 보이는" 키워드 리스트. 호출부는 이 리스트에 없는(=밀려났을 가능성이 있는) 나머지 배치 키워드를 개별로 추가 요청해서 보충한다.
 
     ** 판단 기준 **
-    1. 배치 결과 건수가 MAX_RECORDS의 CROWDING_CAP_TRIGGER_RATIO(90%)
-       이상이어야 검사 자체를 시작한다 - 상한에 안 걸렸으면 애초에 밀려난
-       기사가 있을 수 없으므로 검사가 무의미함(오탐 방지).
-    2. 제목 기준 부분 문자열 매칭으로 키워드별 건수를 세고(근사치 - 아래
-       한계 참고), 배치 전체 대비 비율이 CROWDING_SHARE_THRESHOLD(40%)
-       이상이면 그 키워드를 크라우딩 원인으로 판단한다.
+    1. 배치 결과 건수가 MAX_RECORDS의 CROWDING_CAP_TRIGGER_RATIO(90%) 이상이어야 검사 자체를 시작한다.
+      - 상한에 안 걸렸으면 애초에 밀려난 기사가 있을 수 없으므로 검사가 무의미함(오탐 방지).
+    2. 제목 기준 부분 문자열 매칭으로 키워드별 건수를 세고(근사치 - 아래 한계 참고), 배치 전체 대비 비율이 CROWDING_SHARE_THRESHOLD(40%) 이상이면 그 키워드를 크라우딩 원인으로 판단한다.
 
     ** 한계 (기존 "키워드별 매칭 현황" 로그와 같은 이유) **
     GDELT는 제목뿐 아니라 본문 전체로 매칭하는데 본문은 안 받아오므로, 이 함수는 "제목에 명시적으로 드러난 크라우딩"만 잡아낸다.
@@ -890,9 +868,7 @@ def collect(keywords: list[str] | None = None) -> tuple[list[dict], dict]:
             continue
         crowding_entry = crowding_state.get(keyword)
         if isinstance(crowding_entry, dict) and crowding_entry.get("crowd_count", 0) >= CROWDING_STATE_LEARN_THRESHOLD:
-            # 배치에 넣어봐야 어차피 크라우딩으로 걸려 개별 재요청을 또
-            # 하게 될 뿐이므로, 배치 단계 자체를 건너뛰고 바로 개별 처리
-            # 대상으로 보낸다(요청 횟수 절약).
+            # 배치 단계 자체를 건너뛰고 바로 개별 처리 대상으로 보낸다(요청 횟수 절약).
             print(f"[gdelt] '{keyword}' - 학습된 크라우딩 키워드({crowding_entry.get('crowd_count')}회 "
                   f"연속 상한 근처 확인, {CROWDING_STATE_PATH} 참고) - 배치 없이 바로 개별 요청으로 처리")
             known_crowders.append(keyword)
@@ -906,8 +882,6 @@ def collect(keywords: list[str] | None = None) -> tuple[list[dict], dict]:
         return all_articles, timeline_by_keyword
 
     # --- 시간 예산 추적 시작 ---
-    # time.monotonic()은 시스템 시각 변경(NTP 보정 등)에 영향 안 받는
-    # 경과 시간 측정용 시계라 이런 용도에 적합.
     collect_start = time.monotonic()
     budget_exceeded = False
     skipped_due_to_budget: list[str] = []
@@ -937,14 +911,10 @@ def collect(keywords: list[str] | None = None) -> tuple[list[dict], dict]:
 
         success, batch_articles = _collect_articles_for_keywords(gd, batch)
         if not success:
-            # 배치 요청 자체가 실패하면(429 등) 바로 개별 요청(5배 요청)으로
-            # 전환하지 않는다 - 429는 쿼리 복잡도가 아니라 "요청을 얼마나
-            # 자주 보내는지"에 걸리는 것으로 추정돼서(GDELT가 공식적으로
-            # 밝힌 기준은 아니지만 관측 패턴과 일치), 실패했다고 요청 수를
-            # 5배로 늘리면 상황을 악화시킬 뿐이다. 대신 같은 배치를 그대로
-            # pending_batches에 담아 두고, 아래에서 배치 단위로 재시도한다 -
-            # 정말 "250건 상한을 넘어서" 문제가 되는 경우(크라우딩)만 여전히
-            # 개별로 격리한다(바로 아래 크라우딩 분기는 그대로 유지).
+            # 배치 요청 자체가 실패하면(429 등) 바로 개별 요청(5배 요청)으로 전환하지 않는다.
+            #  - 429는 쿼리 복잡도가 아니라 "요청을 얼마나 자주 보내는지"에 걸리는 것으로 추정돼서(GDELT가 공식적으로 밝힌 기준은 아니지만 관측 패턴과 일치), 실패했다고 요청 수를 5배로 늘리면 상황을 악화시킬 뿐이다.
+            # 대신 같은 배치를 그대로 pending_batches에 담아 두고, 아래에서 배치 단위로 재시도한다.
+            #  - 정말 "250건 상한을 넘어서" 문제가 되는 경우(크라우딩)만 여전히 개별로 격리한다(바로 아래 크라우딩 분기는 그대로 유지).
             print(f"[gdelt] 배치 {batch} 요청 실패 - 같은 배치로 재시도 예정 "
                   f"(개별 전환 아님)")
             pending_batches.append(batch)
@@ -958,14 +928,9 @@ def collect(keywords: list[str] | None = None) -> tuple[list[dict], dict]:
                       f"나머지 키워드 {others} 개별 재요청으로 보충 예정")
                 pending_individual.extend(others)
             elif len(batch_articles) >= MAX_RECORDS * CROWDING_CAP_TRIGGER_RATIO:
-                # 특정 키워드 하나가 독차지한 건 아니지만(그래서
-                # _detect_crowded_keywords는 아무도 못 잡음), 배치 결과가 상한
-                # 근처까지 찼다는 사실 자체는 여전히 위험 신호다 - 여러 키워드가
-                # "골고루" 상한에 밀려서 다들 조금씩 손실을 봤을 수 있는데, 이
-                # 경우 제목 기준 근사치 비율로는 아무도 40%(CROWDING_SHARE_THRESHOLD)를
-                # 못 넘어서 단순 비율 판정만으로는 "크라우딩 없음"으로 오판할 수 있다.
-                # 특정 원인 키워드를 지목할 수 없으므로, 안전하게 배치 전체를
-                # 개별 재요청 대상으로 보충한다.
+                # 특정 키워드 하나가 독차지한 건 아니지만(그래서 _detect_crowded_keywords는 아무도 못 잡음), 배치 결과가 상한 근처까지 찼다는 사실 자체는 여전히 위험 신호다.
+                #  - 여러 키워드가 "골고루" 상한에 밀려서 다들 조금씩 손실을 봤을 수 있는데, 이 경우 제목 기준 근사치 비율로는 아무도 40%(CROWDING_SHARE_THRESHOLD)를 못 넘어서 단순 비율 판정만으로는 "크라우딩 없음"으로 오판할 수 있다.
+                # 특정 원인 키워드를 지목할 수 없으므로, 안전하게 배치 전체를 개별 재요청 대상으로 보충한다.
                 print(f"[gdelt] 배치 {batch} 결과가 상한 근처까지 참({len(batch_articles)}건) - "
                       f"골고루 밀렸을 위험 있어 배치 전체 개별 재요청으로 보충 예정")
                 pending_individual.extend(batch)

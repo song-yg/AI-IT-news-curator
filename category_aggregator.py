@@ -56,7 +56,7 @@ def aggregate(articles: list[dict]) -> dict[str, Counter]:
     국내/해외 두 축으로 나눠서 각각 카테고리별 건수를 집계한다.
 
     반환값: {"국내": Counter, "해외": Counter}
-    (scorer.split_domestic_international과 동일한 축 정의 - 네이버=국내, WATT/GDELT=해외)
+    (scorer.split_domestic_international과 동일한 축 정의 - 네이버=국내, GDELT=해외)
     """
     domestic, international = scorer.split_domestic_international(articles)
     return {
@@ -95,10 +95,6 @@ def compare_with_last_week(current: dict[str, Counter], base_dir: str = "data",
     """
     이번 주 카테고리 집계(aggregate()의 반환값)를 지난주 scored.json의 category_distribution과 비교한다.
 
-    비교 대상을 category_distribution(카테고리별 단순 건수)으로 정한 이유:
-    이 값이 애초에 "다음 주 실행에서 지난주 대비 증감을 계산하려면 지난주 집계 결과가 파일로 남아있어야 한다"는 목적으로 저장돼온 데이터라(storage.save_scored docstring 참고) 가장 자연스러운 1차 비교 대상.
-    이슈(Top N) 단위 비교("이 이슈가 지난주에도 있었나")는 그룹 매칭이 훨씬 까다로워서(제목이 매주 조금씩 다름, 그룹핑 자체가 매주 새로 돎) 범위 밖으로 남겨둠.
-
     지난주 파일이 없으면(첫 실행, 혹은 지난주 저장이 실패했던 경우) 예외를 던지지 않고 None을 반환한다.
     - 호출부가 이걸 보고 "지난주 데이터 없음"으로 안전하게 표시하면 됨.
 
@@ -114,7 +110,7 @@ def compare_with_last_week(current: dict[str, Counter], base_dir: str = "data",
         last_week_distribution = last_week_payload.get("category_distribution")
         if not isinstance(last_week_distribution, dict):
             # None(키 없음/null)이든 리스트 등 다른 타입이든, "지난주 값을 못 읽는다"는 점에서는 파일 자체가 없는 것과 동일한 상황이다.
-            # 여기서 빈 dict로 조용히 대체해버리면 "지난주 0건 -> 이번 주 5건, +5"처럼 실제로는 데이터가 없을 뿐인데 진짜 증가처럼 보이는 오해를 줄 수 있어, 명시적으로 실패시켜 아래 except에서 똑같이 "비교 생략"으로 처리되게 한다.
+            # 빈 dict인 경우 명시적으로 실패시켜 아래 except에서 똑같이 "비교 생략"으로 처리되게 한다.
             raise ValueError(f"category_distribution이 dict가 아님(타입: {type(last_week_distribution).__name__})")
 
         comparison = {}
