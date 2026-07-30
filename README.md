@@ -71,7 +71,7 @@
 - 임베딩 모델 로드 실패 시 1차 결과만으로 안전하게 fallback
 
 ### 2.2 🏷️ 키워드 태깅 — `keyword_tagger.py`
-`CATEGORY_KEYWORDS` 기준으로 카테고리를 부여합니다(AI·IT 도메인으로 교체된 부분):
+`CATEGORY_KEYWORDS` 기준으로 카테고리를 부여합니다:
 
 | 카테고리 | 국문 키워드 | 영문 키워드 |
 |---|---|---|
@@ -123,8 +123,9 @@
 ## 4. ✍️ LLM 요약 — `llm_summarizer.py`
 
 - (A) 자체 요약, (A-1) 단독 기사(그룹 크기 1)는 재료가 얇으면 요약 생략하고 원문 제목만 노출
-- 프로바이더: Anthropic(`claude-haiku-4-5-20251001`) 기본, `LLM_PROVIDER=openrouter`로
-  전환 시 OpenRouter로 대체
+- 프로바이더: 코드 기본값은 Anthropic(`claude-haiku-4-5-20251001`)이지만, 현재 운영은
+  `LLM_PROVIDER=openrouter`로 전환해서 사용 중 — OpenRouter 계정에 $10 크레딧을 선결제해
+  무료 모델 하루 요청 한도를 1000건까지 올려둔 상태(아래 참고)
 - OpenRouter 경로는 `OPENROUTER_MODEL`(1순위) → `OPENROUTER_MODEL_2`(2순위, 선택) →
   `OPENROUTER_MODEL_3`(3순위, 선택) → `openrouter/free`(최종 안전망) 순으로 시도
   (`issue_grouper.py`/`relevance_filter.py`/`llm_summarizer.py` 세 곳 동일 구조 공유)
@@ -134,11 +135,12 @@
   Top N으로 추려진 기사에 한해 `trafilatura`로 본문 추가 수집을 시도(실패해도 기존
   fallback으로 안전하게 처리)
 
-### ⚠️ 프로바이더 관련 알려진 이슈
-OpenRouter 무료 티어는 분당 20건 + (크레딧 구매 이력 없으면) 하루 50건으로 제한되는데,
-관련성 필터+카테고리 재분류+3차 그룹핑+요약을 합치면 한 번 실행에 수십 건의 LLM 호출이
-발생해 크레딧 없는 계정은 실행 1회로 하루 상한을 넘길 수 있습니다. `ANTHROPIC_API_KEY`가
-설정되어 있으면 기본 경로(Anthropic)를 쓰므로 이 문제와 무관합니다.
+### 💳 프로바이더 결정 — OpenRouter $10 선결제
+OpenRouter 무료 티어는 기본적으로 분당 20건 + 하루 50건으로 제한되는데, 관련성 필터+
+카테고리 재분류+3차 그룹핑+요약을 합치면 한 번 실행에 수십 건의 LLM 호출이 발생해
+크레딧 없는 계정은 실행 1회로 하루 상한을 넘길 수 있었습니다. 이를 해결하기 위해
+OpenRouter 계정에 $10 크레딧을 1회 선결제해서 무료 모델 하루 요청 한도를 1000건으로
+올려두는 것으로 확정했습니다(`OPENROUTER_API_KEY` 사용, `ANTHROPIC_API_KEY`는 미사용).
 
 ---
 
@@ -194,9 +196,9 @@ OpenRouter 무료 티어는 분당 20건 + (크레딧 구매 이력 없으면) �
 | `NAVER_CLIENT_ID` | Secret | 네이버 뉴스 검색 API 인증 | `naver_collector.py` |
 | `NAVER_CLIENT_SECRET` | Secret | 위 ID와 짝을 이루는 비밀키 | `naver_collector.py` |
 | `KEYWORD_SHEET_CSV_URL` | Variable | 구글 시트(공개 게시 CSV)에서 검색 키워드를 읽어오는 URL | 없으면 각 collector의 하드코딩 fallback 키워드 사용 |
-| `ANTHROPIC_API_KEY` | Secret | Anthropic API 키(`LLM_PROVIDER=anthropic`, 기본 경로) | 없으면 LLM 호출이 안전하게 생략됨 |
-| `LLM_PROVIDER` | Variable | `anthropic`(기본값) 또는 `openrouter` | 미등록 시 기본값 `anthropic` |
-| `OPENROUTER_API_KEY` | Secret | OpenRouter API 키(`LLM_PROVIDER=openrouter`) | |
+| `ANTHROPIC_API_KEY` | Secret | Anthropic API 키(`LLM_PROVIDER=anthropic`일 때 사용) | 현재 운영에서는 미사용(아래 `LLM_PROVIDER` 참고) |
+| `LLM_PROVIDER` | Variable | `anthropic`(코드 기본값) 또는 `openrouter` | 현재는 `openrouter`로 설정해서 운영 중 |
+| `OPENROUTER_API_KEY` | Secret | OpenRouter API 키 | $10 선결제 크레딧이 연결된 계정 키(하루 요청 한도 1000건) |
 | `OPENROUTER_MODEL` | Variable | OpenRouter 1순위 모델명 | 비우면 자동 라우터(`openrouter/free`) |
 | `OPENROUTER_MODEL_2` | Variable | 1순위 실패 시 2순위 모델 | 선택 |
 | `OPENROUTER_MODEL_3` | Variable | 2순위도 실패 시 3순위 모델 | 선택, 이후 항상 `openrouter/free`가 최종 안전망 |
@@ -217,12 +219,3 @@ python main.py
 로컬 실행 시 `.env` 파일에 `NAVER_CLIENT_ID`/`NAVER_CLIENT_SECRET` 등을 넣어두면
 `naver_collector.py`가 자동으로 읽습니다(`python-dotenv`). GitHub Actions에서는 Secrets가
 이미 주입되어 있어 `.env` 없이도 동작합니다.
-
----
-
-## 🚧 알려진 미해결 사항
-
-- GDELT 429로 인한 긴 실행 시간 — 구조적 한계, 근본 해결책 없음
-- `THRESHOLD`/`BORDERLINE_MARGIN`/`PRESS_DEDUP_CAP`/`CATEGORY_TOP_N` 등 여러 잠정값은
-  실측 기반 조정이 계속 필요
-- 이메일 수신자 확대 여부는 추후 결정
