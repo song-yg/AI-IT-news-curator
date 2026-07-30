@@ -1,26 +1,20 @@
 """
 deploy.py - 6단계 배포 레이어.
 
-Gmail SMTP로 이번 주 큐레이션 결과를 HTML 이메일로 발송한다.
-main.py의 [6] 배포 단계에서 이 모듈의 send_weekly_email()을 호출한다.
+Gmail SMTP로 이번 주 큐레이션 결과를 HTML 이메일로 발송. main.py의 [6]에서 send_weekly_email() 호출.
 
-** 인증정보 관리 **
-GitHub Secrets(민감정보라 Variables 아님)에서 읽는다:
-  SMTP_USER          발신용 Gmail 주소
-  SMTP_APP_PASSWORD  Gmail 앱 비밀번호(일반 로그인 비밀번호 아님)
-  EMAIL_RECIPIENTS   수신자 이메일, 콤마로 구분
+** 인증정보 ** GitHub Secrets에서 읽음: SMTP_USER(발신 Gmail), SMTP_APP_PASSWORD(앱 비밀번호),
+EMAIL_RECIPIENTS(콤마 구분 수신자).
 
-** 콘텐츠 구성 **
-storage.py가 이미 만들어둔 domestic_summarized/international_summarized/domestic_by_category/international_by_category(scored.json과 동일한 데이터)를 그대로 받아서 summary.md와 같은 구조(요약 유무와 무관하게 원문 링크는 항상 같이 노출)로 HTML을 렌더링한다.
-이메일 클라이언트는 외부 스타일시트를 지원 안 하는 경우가 많아 인라인 스타일만 사용.
+** 콘텐츠 구성 ** storage.py가 만든 domestic/international_summarized·by_category(scored.json과
+동일 데이터)를 받아 summary.md와 같은 구조로 HTML 렌더링. 이메일 클라이언트는 외부 스타일시트를
+지원 안 하는 경우가 많아 인라인 스타일만 사용.
 
-** Outlook 렌더링 관련 **
-border-radius(둥근 모서리)는 아웃룩 데스크톱(Word 렌더링 엔진)에서 무시되고 그냥 각진 사각형으로 보인다.
-  - 레이아웃이 깨지진 않고 덜 둥글게만 보이는 수준이라, 별도 VML 폴백 없이 그대로 둔다.
+** Outlook 렌더링 ** border-radius는 아웃룩 데스크톱(Word 렌더링 엔진)에서 무시되고 각진
+사각형으로 보인다 - 레이아웃은 안 깨지고 덜 둥글게만 보이는 수준이라 VML 폴백 없이 그대로 둠.
 
-** 안전 실패 원칙 **
-storage.py와 같은 방향 - 이메일 발송이 실패해도(SMTP 인증 오류, 네트워크 문제 등) 예외를 그대로 던지지 않고 로그만 남기고 조용히 실패한다.
-이 시점엔 이미 수집/스코어링/요약/저장이 다 끝난 뒤라, 배포 하나 실패했다고 전체 실행을 죽이면 안 된다는 판단.
+** 안전 실패 ** storage.py와 같은 방향 - 발송 실패(SMTP 인증 오류 등) 시 예외 대신 로그만 남기고
+조용히 실패 (이미 수집/스코어링/요약/저장이 끝난 뒤라 배포 하나로 전체를 죽이면 안 됨).
 """
 
 import html
@@ -46,16 +40,12 @@ def _escape(value) -> str:
 
 def _humanize_week_label(week_label: str) -> str:
     """
-    main.py가 넘겨주는 week_label : ISO 연도-주차 형식("2026-31")
-    이메일에 그대로 노출하기엔 사람이 바로 와닿지 않는 형식이라, 여기서만 "2026년 7월 5주차"처럼 사람이 읽기 편한 형식으로 변환해서 헤더/제목에 쓴다.
+    week_label(ISO 연도-주차, "2026-31")을 "2026년 7월 5주차"처럼 사람이 읽기 편한 형식으로
+    변환 - 헤더/제목 표시용, 저장/비교에는 안 쓰임.
 
-    변환 방법: ISO 연도-주차의 월요일 날짜를 구한 뒤, 그 날짜가 속한 "월" 기준으로
-    "(일 - 1) // 7 + 1"주차를 계산한다(예: 7월 29일이면 (29-1)//7+1 = 5주차).
-      - 달력 주(일~토)가 아니라 "그 달 1일부터 7일 단위로 끊은 몇 번째 구간"이라는 단순한 정의라, 별도 라이브러리 없이도 결정적으로 계산 가능.
-      - 이 값은 어디까지나 이메일 표시용이고, 저장/비교에는 전혀 쓰이지 않는다.
-
-    변환에 실패하면(형식이 예상과 다른 경우 등) 원본 week_label을 그대로 반환한다.
-      - 표시 형식 하나 때문에 이메일 발송 전체가 막히면 안 됨.
+    ISO 주차의 월요일 날짜를 구해서 그 달 1일부터 7일 단위로 끊은 몇 번째 구간인지 계산
+    ((day-1)//7+1) - 달력 주(일~토)와는 다른 단순 정의라 별도 라이브러리 없이 결정적으로 계산 가능.
+    변환 실패 시 원본 week_label 그대로 반환 (표시 형식 하나 때문에 발송 전체가 막히면 안 됨).
     """
     try:
         year_str, week_str = week_label.split("-")
@@ -71,12 +61,9 @@ def _humanize_week_label(week_label: str) -> str:
 
 def _format_issue_html(item: dict, rank: int | None = None, accent: str = DOMESTIC_ACCENT) -> str:
     """
-    이슈 하나 분량의 HTML 카드. summary.md의 _format_issue_section과 같은 정보를 담는다.
-
-    rank: 이 이슈가 속한 목록(전체 Top N 또는 카테고리별 Top N) 안에서 몇 번째인지.
-    None이면(순위 개념이 없는 호출부) 뱃지를 안 붙인다.
-      - 호출부(_format_section_html/_format_category_html)가 enumerate로 1부터 매겨서 넘겨준다.
-    accent: 국내(파랑)/해외(보라) 축 구분 색상 - 순위 뱃지 배경색에 사용.
+    이슈 하나 분량의 HTML 카드 (storage._format_issue_section과 같은 정보).
+    rank: 목록 내 순서(None이면 순위 뱃지 없음, 호출부가 enumerate로 1부터 매겨서 넘김).
+    accent: 국내(파랑)/해외(보라) 구분 색상.
     """
     titles = item.get("titles", [])
     rep_title = titles[0] if titles else "(제목 없음)"
@@ -125,8 +112,7 @@ def _format_section_html(title: str, items: list[dict], accent: str = DOMESTIC_A
               f'border-left:4px solid {accent};">{_escape(title)}</h3>')
     if not items:
         return header + '<p style="color:#999; font-size:13px;">(이번 주 이슈 없음)</p>'
-    # items는 scorer.score_and_rank()가 이미 점수순으로 정렬해둔 상태 - 그 순서
-    # 그대로 1부터 번호만 매기면 됨(2026-07-28, 순위 번호 표시 추가).
+    # items는 이미 점수순 정렬 상태 - 그대로 1부터 번호만 매김
     body = "".join(_format_issue_html(item, rank=i, accent=accent) for i, item in enumerate(items, start=1))
     return header + body
 
@@ -144,18 +130,16 @@ def _format_category_html(label: str, by_category: dict[str, list[dict]],
             f'background:{pill_bg}; color:{accent}; font-size:12px; font-weight:bold; '
             f'margin:14px 0 8px 0;">{_escape(category)}</span></div>'
         )
-        # 카테고리별로 별도의 Top N이므로, 전체 순위가 아니라 그 카테고리 안에서
-        # 1부터 다시 매김(2026-07-28, 순위 번호 표시 추가).
+        # 카테고리별 별도 Top N이라 전체 순위가 아니라 카테고리 안에서 1부터 다시 매김
         blocks.append("".join(_format_issue_html(item, rank=i, accent=accent) for i, item in enumerate(items, start=1)))
     return header + "".join(blocks)
 
 
 def _format_category_comparison_html(category_comparison: dict[str, dict[str, dict]] | None) -> str:
     """
-    category_aggregator.compare_with_last_week()의 결과를 이메일 상단에 표(<table>) 형태로 넣는다.
-    storage._format_category_comparison_section(summary.md용)과 같은 정보, 렌더링 형식만 HTML 표.
-
-    <ul> 목록 대신 <table>을 쓰는 이유: 이메일 클라이언트(특히 아웃룩)는 flex/grid 지원이 들쭉날쭉해도 <table>은 옛날부터 안정적으로 지원되므로, "카테고리 / 이번 주 / 지난주 / 증감" 4열을 나란히 보여주기엔 표가 더 안전하다.
+    지난주 대비 증감을 이메일 상단에 <table>로 표시 (storage._format_category_comparison_section과
+    같은 정보, 렌더링만 표 형식). <table>을 쓰는 이유: 이메일 클라이언트(특히 아웃룩)는
+    flex/grid 지원이 들쭉날쭉해도 표는 안정적으로 지원됨.
     """
     if not category_comparison:
         return ""
@@ -200,11 +184,9 @@ def render_email_html(week_label: str, domestic_summarized: list[dict], internat
                        failed_sources: list[str],
                        category_comparison: dict[str, dict[str, dict]] | None = None) -> str:
     """
-    scored.json과 동일한 데이터를 받아 이메일 본문(HTML 문자열)을 만든다.
-    summary.md(storage.py)와 콘텐츠 구성(정보량)은 같고 렌더링 형식만 헤더 배너 + 카드형 HTML로 다르다.
-
-    category_comparison(지난주 대비 증감)이 있으면 제목 바로 아래에 추가
-      - "이번 주 큰 흐름"을 이슈 목록보다 먼저 보여주는 구성(summary.md와 동일한 배치 원칙).
+    scored.json과 동일한 데이터로 이메일 본문(HTML)을 만든다. summary.md와 정보량은 같고
+    렌더링만 헤더 배너 + 카드형 HTML로 다르다.
+    category_comparison이 있으면 제목 바로 아래 배치 (summary.md와 동일한 배치 원칙).
     """
     week_label_human = _humanize_week_label(week_label)
 
@@ -222,9 +204,7 @@ def render_email_html(week_label: str, domestic_summarized: list[dict], internat
             f'참고 - 이번 실행에서 실패한 소스: {_escape(", ".join(failed_sources))}</p>'
         )
 
-    # 푸터 - AI 저작 고지(요약문이 LLM 생성이라는 점)와 자동 발송 안내를 함께 표시.
-    # "AI의 식견" 같은 종합 동향 문단은 이번 스코프에서 제외됐지만, 이슈별 요약
-    # 자체는 여전히 llm_summarizer.py가 생성하므로 이 고지는 유지.
+    # 푸터 - AI 저작 고지 + 자동 발송 안내
     body_parts.append(
         '<p style="margin-top:28px; padding-top:16px; border-top:1px solid #eee; font-size:11px; '
         'color:#aaa; text-align:center;">이 요약은 AI가 자동으로 작성했으며, 실수가 있을 수 있습니다.'
@@ -251,11 +231,7 @@ def render_email_html(week_label: str, domestic_summarized: list[dict], internat
 
 def send_email(html_content: str, subject: str, recipients: list[str],
                smtp_user: str, smtp_app_password: str) -> bool:
-    """
-    Gmail SMTP(587, STARTTLS)로 HTML 이메일을 보낸다.
-    성공하면 True, 실패하면 (예외를 던지지 않고) False를 반환한다.
-     - 호출부가 이 결과로 로그만 남기고 계속 진행할 수 있게.
-    """
+    """Gmail SMTP(587, STARTTLS)로 HTML 이메일 발송. 성공 True, 실패(예외 없이) False."""
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = smtp_user
@@ -281,9 +257,8 @@ def send_weekly_email(week_label: str, domestic_summarized: list[dict], internat
                        failed_sources: list[str],
                        category_comparison: dict[str, dict[str, dict]] | None = None) -> bool:
     """
-    main.py에서 부르는 단일 진입점. 환경변수(GitHub Secrets)에서 인증정보를 읽고, 없으면 요약 모듈들과 같은 패턴으로 안전하게 생략한다.
-
-    week_label은 main.py가 넘겨주는 ISO 연도-주차 형식("2026-31") 그대로 받는다.
+    main.py에서 부르는 단일 진입점. GitHub Secrets에서 인증정보를 읽고, 없으면 안전하게 생략.
+    week_label은 main.py의 ISO 연도-주차 형식("2026-31") 그대로 받는다.
     """
     smtp_user = os.environ.get("SMTP_USER")
     smtp_app_password = os.environ.get("SMTP_APP_PASSWORD")
