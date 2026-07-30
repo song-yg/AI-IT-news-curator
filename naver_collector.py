@@ -111,8 +111,8 @@ def search_naver_news(keyword: str, client_id: str, client_secret: str, start: i
     """
     네이버 뉴스 검색 API 호출, 공통 스키마로 정리해서 반환.
 
-    session을 안 넘기면 requests 모듈을 그대로 써서 매번 새 연결을 맺는다
-    (세션 재사용은 순전히 성능 최적화, 없어도 기능은 동일).
+    session을 안 넘기면 requests 모듈을 그대로 써서 매번 새 연결을 맺는다.
+    (세션 재사용은 순전히 성능 최적화, 없어도 기능은 동일)
     """
     headers = {
         "X-Naver-Client-Id": client_id,
@@ -158,11 +158,10 @@ def _extract_press(originallink: str) -> str:
     네이버 API에 언론사명 필드가 없어서 원문 URL 도메인을 언론사 식별자로 대신 사용.
     예: "https://www.yna.co.kr/..." -> "yna.co.kr"
 
-    www. 제거는 startswith 체크 후 슬라이싱 (replace는 서브도메인 중간에 우연히 "www."가
-    있어도 지워버릴 수 있어서 위험).
+    www. 제거는 startswith 체크 후 슬라이싱 (replace는 서브도메인 중간에 우연히 "www."가 있어도 지워버릴 수 있어서 위험).
 
-    biz.yna.co.kr / www.yna.co.kr 같은 서브도메인 통합은 안 함 - 정확히 하려면 tldextract
-    등이 필요함. 실제 문제(scorer PRESS_DEDUP_CAP 왜곡) 확인되면 대응.
+    biz.yna.co.kr / www.yna.co.kr 같은 서브도메인 통합은 안 함 - 정확히 하려면 tldextract 등이 필요함.
+    실제 문제(scorer PRESS_DEDUP_CAP 왜곡) 확인되면 대응.
     """
     if not originallink:
         return ""

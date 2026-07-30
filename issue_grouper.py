@@ -63,10 +63,9 @@ def _stage1_match_keys(title: str) -> set[int]:
 # ---------------------------------------------------------------------------
 #
 # 왜 필요한가: "A와 B가 매칭", "B와 C가 매칭"이라는 개별 판정 결과가 나왔을 때,
-# 최종적으로는 "A, B, C가 전부 한 그룹"이어야 한다 (B를 통해 A와 C도 간접
-# 연결됨). 이렇게 "여러 개의 쌍(pair) 매칭 결과를 하나의 그룹으로 합쳐주는"
-# 표준 자료구조가 Union-Find다. 코드 자체는 짧지만 동작 원리가 직관적이지
-# 않을 수 있어서 아래에 최대한 풀어서 주석을 달았다.
+# 최종적으로는 "A, B, C가 전부 한 그룹"이어야 한다 (B를 통해 A와 C도 간접 연결됨).
+# 이렇게 "여러 개의 쌍(pair) 매칭 결과를 하나의 그룹으로 합쳐주는" 표준 자료구조가 Union-Find다.
+# 코드 자체는 짧지만 동작 원리가 직관적이지 않을 수 있어서 아래에 최대한 풀어서 주석을 달았다.
 class UnionFind:
     """
     각 기사(인덱스)를 하나의 "그룹 대표"에 연결해두는 구조.
@@ -269,9 +268,8 @@ def stage2_group(
     vectors = model.encode(texts, normalize_embeddings=True)
     sim_matrix = _cosine_similarity_matrix(vectors)
 
-    # 임계값 튜닝용 디버그 CSV - 기본은 꺼져있음(위 SIMILARITY_DEBUG_CSV
-    # 선언부 참고). 켜져 있을 때만 계산·저장하고, 실패해도 안전하게 로그만
-    # 남기고 계속 진행함(그룹핑 로직 자체와는 무관).
+    # 임계값 튜닝용 디버그 CSV - 기본은 꺼져있음(위 SIMILARITY_DEBUG_CSV 선언부 참고).
+    # 켜져 있을 때만 계산·저장하고, 실패해도 안전하게 로그만 남기고 계속 진행함(그룹핑 로직 자체와는 무관).
     if SIMILARITY_DEBUG_CSV:
         export_similarity_scores(articles, sim_matrix, threshold, borderline_margin)
 

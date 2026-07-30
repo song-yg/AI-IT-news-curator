@@ -171,11 +171,12 @@ def score(articles: list[dict], model, top_n: int = TOP_N) -> tuple[list[dict], 
 
 def _load_embedding_model():
     """
-    BGE-M3 임베딩 모델을 실행당 한 번만 로드해서 score() 단계에 주입한다 (모델 로드가 무거워서
-    기사 배치마다 새로 로드하면 안 됨 - issue_grouper.stage2_group 참고). run() 전체에서 한 번만 호출.
+    BGE-M3 임베딩 모델을 실행당 한 번만 로드해서 score() 단계에 주입한다.
+    (모델 로드가 무거워서 기사 배치마다 새로 로드하면 안 됨 - issue_grouper.stage2_group 참고).
+    run() 전체에서 한 번만 호출.
 
-    로드 실패(다운로드 실패, 패키지 미설치 등) 시 예외를 잡아 None 반환 - group_issues(model=None)이
-    2차(임베딩) 생략하고 1차 사전 매칭만으로 안전하게 fallback하도록 이미 설계돼 있음.
+    로드 실패(다운로드 실패, 패키지 미설치 등) 시 예외를 잡아 None 반환
+      - group_issues(model=None)이 2차(임베딩) 생략하고 1차 사전 매칭만으로 안전하게 fallback하도록 설계돼 있음.
     """
     try:
         from sentence_transformers import SentenceTransformer
@@ -205,8 +206,7 @@ def step4_category_llm_summary(domestic_category_ranked: dict[str, list[dict]],
                                 ) -> tuple[dict[str, list[dict]], dict[str, list[dict]]]:
     """
     step4_llm_summary와 같은 (A)/(A-1) 로직을 카테고리별 Top N 결과에 적용.
-    {카테고리: [항목]} 형태를 평평한 리스트로 합쳐서 요약(카테고리 축마다 세션 하나로 묶어 API
-    호출 오버헤드 절감) 후 다시 카테고리별로 묶어 반환.
+    {카테고리: [항목]} 형태를 평평한 리스트로 합쳐서 요약(카테고리 축마다 세션 하나로 묶어 API 호출 오버헤드 절감) 후 다시 카테고리별로 묶어 반환.
     """
     domestic_flat = [item for items in domestic_category_ranked.values() for item in items]
     international_flat = [item for items in international_category_ranked.values() for item in items]
@@ -221,8 +221,9 @@ def step4_category_llm_summary(domestic_category_ranked: dict[str, list[dict]],
 def step4_llm_summary(domestic_ranked: list[dict],
                        international_ranked: list[dict]) -> tuple[list[dict], list[dict]]:
     """
-    (A) 자체 요약 + (A-1) 얇은 재료 fallback. 실제 로직은 llm_summarizer.py, 여기는 국내/해외를
-    각각 넘기는 얇은 호출부다 ((B) 그룹핑 보조는 issue_grouper.stage3_llm_assist가 별도 처리).
+    (A) 자체 요약 + (A-1) 얇은 재료 fallback.
+    실제 로직은 llm_summarizer.py, 여기는 국내/해외를 각각 넘기는 얇은 호출부다.
+    ((B) 그룹핑 보조는 issue_grouper.stage3_llm_assist가 별도 처리)
 
     domestic_ranked/international_ranked는 score()에서 이미 TOP_N으로 제한된 상태 (추가로 안 자름).
     반환값은 입력과 같은 형태에 "summary"/"summary_skipped_reason" 필드가 추가된 것.
@@ -241,8 +242,8 @@ def run() -> None:
     articles, gdelt_timeline, failed_sources = run_collectors()
 
     print("\n=== [2] 정규화 ===")
-    # 이 단계부터 [4-보조]까지 각 단계를 안전망으로 감싼다 - 예상 못 한 예외가 나도 그 단계만
-    # 기본값으로 넘어가고, 이미 모은 articles는 살려서 [5] 저장/[6] 배포까지 도달하게 함.
+    # 이 단계부터 [4-보조]까지 각 단계를 안전망으로 감싼다.
+    #  - 예상 못 한 예외가 나도 그 단계만 기본값으로 넘어가고, 이미 모은 articles는 살려서 [5] 저장/[6] 배포까지 도달하게 함.
     try:
         articles = normalize(articles)
         keyword_tagger.tag_articles(articles)
@@ -260,9 +261,8 @@ def run() -> None:
               f"{type(e).__name__} - {e!r}")
 
     print("\n=== [2.6] 카테고리 재분류 ===")
-    # keyword_tagger(사전 매칭)와 relevance_filter(LLM 판단)의 기준이 달라서, 사전엔 안 걸려
-    # "기타"로 붙었는데 relevance_filter는 "관련 있음"으로 확정하는 기사가 생길 수 있다 -
-    # 이런 기사만 다시 LLM에 물어 재분류.
+    # keyword_tagger(사전 매칭)와 relevance_filter(LLM 판단)의 기준이 달라서, 사전엔 안 걸려 "기타"로 붙었는데
+    # relevance_filter는 "관련 있음"으로 확정하는 기사가 생길 수 있다 - 이런 기사만 다시 LLM에 물어 재분류.
     try:
         articles = relevance_filter.recategorize_uncategorized(articles)
     except Exception as e:
@@ -287,8 +287,7 @@ def run() -> None:
         domestic_category_ranked, international_category_ranked = {}, {}
 
     print("\n=== [3-보조] 카테고리 전체 집계 ===")
-    # 이슈 그룹핑이 "동일 사건만" 묶는 좁은 정의라 생기는 공백을 메우는 거친 보조 지표
-    # (category_aggregator.py 참고)
+    # 이슈 그룹핑이 "동일 사건만" 묶는 좁은 정의라 생기는 공백을 메우는 거친 보조 지표 (category_aggregator.py 참고)
     try:
         category_distribution = category_aggregator.aggregate(articles)
         # 지난주 데이터 없으면(첫 실행 등) compare_with_last_week가 안전하게 None 반환
@@ -326,8 +325,7 @@ def run() -> None:
 
     print("\n=== [5] 저장 ===")
     # 수동 실행(workflow_dispatch)은 테스트/임시 확인용이라 저장하면 안 됨 - "지난주 대비 증감"
-    # 비교 기준이 테스트 데이터로 오염될 수 있음(예: 토요일 테스트 실행이 다음 월요일 정식
-    # 실행의 "지난주 실적"으로 잘못 비교되는 사고).
+    # 비교 기준이 테스트 데이터로 오염될 수 있음(예: 토요일 테스트 실행이 다음 월요일 정식 실행의 "지난주 실적"으로 잘못 비교되는 사고).
     # GITHUB_EVENT_NAME은 GitHub Actions 자동 환경변수 (로컬 등 없는 환경에선 "수동 아님"으로 처리)
     is_manual_run = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
     if is_manual_run:
@@ -345,8 +343,7 @@ def run() -> None:
                   f"{type(e).__name__} - {e!r}")
             saved_dir = None
     print("\n=== [6] 배포 ===")
-    # week_label은 저장이 성공했으면 그 디렉토리 이름을 재사용(주차 계산 중복 방지),
-    # 저장이 실패한 드문 경우만 직접 계산.
+    # week_label은 저장이 성공했으면 그 디렉토리 이름을 재사용(주차 계산 중복 방지), 저장이 실패한 드문 경우만 직접 계산.
     try:
         week_label = os.path.basename(saved_dir) if saved_dir else datetime.now(timezone.utc).strftime("%G-%V")
         deploy.send_weekly_email(week_label, domestic_summarized, international_summarized,

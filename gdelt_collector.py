@@ -937,19 +937,15 @@ def collect(keywords: list[str] | None = None) -> tuple[list[dict], dict]:
         time.sleep(REQUEST_INTERVAL)
 
     # --- 1-보조단계: 배치 요청 자체가 실패한 것들을 "배치 그대로" 재시도 ---
-    # 크라우딩(상한 초과류 문제)과 달리 이건 단순히 그 순간 요청이 안 됐던
-    # 것뿐이라, 개별로 쪼개서 요청 수를 5배로 늘리는 대신 같은 배치로 다시
-    # 시도한다. 여기서도 계속 실패하면(OUTER_RETRY_PASSES를 다 써도 안
-    # 되면) 마지막 안전망으로만 개별 전환한다 - 무한정 배치로만 매달리다
-    # 데이터를 아예 못 건지는 것보다는 낫다는 판단.
-    # pending_batches는 이미 1단계에서 1차 시도가 끝난 뒤 실패한 것들이라,
-    # 여기서는 재시도 라운드를 1부터 센다(0부터 다시 세면 원래 개별 재시도
-    # 섹션(아래)의 "OUTER_RETRY_PASSES+1번 시도"와 총 시도 횟수 기준이
-    # 어긋남 - 개별 섹션은 round_keywords가 "아직 한 번도 개별로 안 뚫려본
-    # 것"부터 세는 반면, 여기는 이미 1회 시도가 끝난 것부터 세는 차이).
+    # 크라우딩(상한 초과류 문제)과 달리 이건 단순히 그 순간 요청이 안 됐던 것뿐이라, 개별로 쪼개서 요청 수를 5배로 늘리는 대신 같은 배치로 다시 시도한다.
+    # 여기서도 계속 실패하면(OUTER_RETRY_PASSES를 다 써도 안 되면) 마지막 안전망으로만 개별 전환한다.
+    #  - 무한정 배치로만 매달리다 데이터를 아예 못 건지는 것보다는 낫다는 판단.
+    # pending_batches는 이미 1단계에서 1차 시도가 끝난 뒤 실패한 것들이라, 여기서는 재시도 라운드를 1부터 센다.
+    #  - 0부터 다시 세면 원래 개별 재시도 섹션(아래)의 "OUTER_RETRY_PASSES+1번 시도"와 총 시도 횟수 기준이 어긋남.
+    #  - 개별 섹션은 round_keywords가 "아직 한 번도 개별로 안 뚫려본 것"부터 세는 반면, 여기는 이미 1회 시도가 끝난 것부터 세는 차이
     #
-    # 이미 1단계에서 시간 예산을 다 썼으면(budget_exceeded) 이 단계 자체를
-    # 건너뛴다 - pending_batches에 남은 키워드는 "미시도"로 넘긴다.
+    # 이미 1단계에서 시간 예산을 다 썼으면(budget_exceeded) 이 단계 자체를 건너뛴다.
+    #  - pending_batches에 남은 키워드는 "미시도"로 넘긴다.
     if budget_exceeded:
         skipped_due_to_budget.extend(kw for b in pending_batches for kw in b)
         pending_batches = []
@@ -1004,14 +1000,16 @@ def collect(keywords: list[str] | None = None) -> tuple[list[dict], dict]:
             pending_individual.extend(batch)
 
     # --- 2단계: 개별 보충 요청 - 실패한 것만 외부 재시도 라운드 ---
-    # 이미 시간 예산을 다 썼으면 이 단계 자체를 건너뛴다 - pending_individual에 쌓인 키워드는 전부 "미시도"로 넘긴다.
+    # 이미 시간 예산을 다 썼으면 이 단계 자체를 건너뛴다.
+    #  - pending_individual에 쌓인 키워드는 전부 "미시도"로 넘긴다.
     if budget_exceeded:
         skipped_due_to_budget.extend(pending_individual)
         pending_individual = []
 
     round_keywords = list(dict.fromkeys(pending_individual))  # 순서 유지하며 중복 제거
     failed_keywords: list[str] = []
-    # 키워드별 마지막 실패 사유(예외 타입+메시지) - 라운드를 거듭할수록 최신 시도의 사유로 덮어써진다.
+    # 키워드별 마지막 실패 사유(예외 타입+메시지)
+    #  - 라운드를 거듭할수록 최신 시도의 사유로 덮어써진다.
     # "최종 실패 키워드" 로그에 원인까지 같이 남겨서, 429(서버 혼잡) 때문인지 다른 이유(네트워크 오류, 예상 못 한 예외 등)인지 운영자가 로그만 보고 구분할 수 있게 한다.
     failure_reasons: dict[str, str] = {}
 

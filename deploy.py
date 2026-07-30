@@ -3,18 +3,20 @@ deploy.py - 6단계 배포 레이어.
 
 Gmail SMTP로 이번 주 큐레이션 결과를 HTML 이메일로 발송. main.py의 [6]에서 send_weekly_email() 호출.
 
-** 인증정보 ** GitHub Secrets에서 읽음: SMTP_USER(발신 Gmail), SMTP_APP_PASSWORD(앱 비밀번호),
-EMAIL_RECIPIENTS(콤마 구분 수신자).
+** 인증정보 **
+GitHub Secrets에서 읽음: SMTP_USER(발신 Gmail), SMTP_APP_PASSWORD(앱 비밀번호), EMAIL_RECIPIENTS(콤마 구분 수신자).
 
-** 콘텐츠 구성 ** storage.py가 만든 domestic/international_summarized·by_category(scored.json과
-동일 데이터)를 받아 summary.md와 같은 구조로 HTML 렌더링. 이메일 클라이언트는 외부 스타일시트를
-지원 안 하는 경우가 많아 인라인 스타일만 사용.
+** 콘텐츠 구성 **
+storage.py가 만든 domestic/international_summarized·by_category(scored.json과 동일 데이터)를 받아 summary.md와 같은 구조로 HTML 렌더링.
+이메일 클라이언트는 외부 스타일시트를 지원 안 하는 경우가 많아 인라인 스타일만 사용.
 
-** Outlook 렌더링 ** border-radius는 아웃룩 데스크톱(Word 렌더링 엔진)에서 무시되고 각진
-사각형으로 보인다 - 레이아웃은 안 깨지고 덜 둥글게만 보이는 수준이라 VML 폴백 없이 그대로 둠.
+** Outlook 렌더링 **
+border-radius는 아웃룩 데스크톱(Word 렌더링 엔진)에서 무시되고 각진 사각형으로 보인다.
+레이아웃은 안 깨지고 덜 둥글게만 보이는 수준이라 VML 폴백 없이 그대로 둠.
 
-** 안전 실패 ** storage.py와 같은 방향 - 발송 실패(SMTP 인증 오류 등) 시 예외 대신 로그만 남기고
-조용히 실패 (이미 수집/스코어링/요약/저장이 끝난 뒤라 배포 하나로 전체를 죽이면 안 됨).
+** 안전 실패 **
+storage.py와 같은 방향.
+발송 실패(SMTP 인증 오류 등) 시 예외 대신 로그만 남기고조용히 실패 (이미 수집/스코어링/요약/저장이 끝난 뒤라 배포 하나로 전체를 죽이면 안 됨).
 """
 
 import html
@@ -40,11 +42,11 @@ def _escape(value) -> str:
 
 def _humanize_week_label(week_label: str) -> str:
     """
-    week_label(ISO 연도-주차, "2026-31")을 "2026년 7월 5주차"처럼 사람이 읽기 편한 형식으로
-    변환 - 헤더/제목 표시용, 저장/비교에는 안 쓰임.
+    week_label(ISO 연도-주차, "2026-31")을 "2026년 7월 5주차"처럼 사람이 읽기 편한 형식으로 변환.
+      - 헤더/제목 표시용, 저장/비교에는 안 쓰임.
 
-    ISO 주차의 월요일 날짜를 구해서 그 달 1일부터 7일 단위로 끊은 몇 번째 구간인지 계산
-    ((day-1)//7+1) - 달력 주(일~토)와는 다른 단순 정의라 별도 라이브러리 없이 결정적으로 계산 가능.
+    ISO 주차의 월요일 날짜를 구해서 그 달 1일부터 7일 단위로 끊은 몇 번째 구간인지 계산((day-1)//7+1)
+      - 달력 주(일~토)와는 다른 단순 정의라 별도 라이브러리 없이 결정적으로 계산 가능.
     변환 실패 시 원본 week_label 그대로 반환 (표시 형식 하나 때문에 발송 전체가 막히면 안 됨).
     """
     try:
@@ -137,9 +139,8 @@ def _format_category_html(label: str, by_category: dict[str, list[dict]],
 
 def _format_category_comparison_html(category_comparison: dict[str, dict[str, dict]] | None) -> str:
     """
-    지난주 대비 증감을 이메일 상단에 <table>로 표시 (storage._format_category_comparison_section과
-    같은 정보, 렌더링만 표 형식). <table>을 쓰는 이유: 이메일 클라이언트(특히 아웃룩)는
-    flex/grid 지원이 들쭉날쭉해도 표는 안정적으로 지원됨.
+    지난주 대비 증감을 이메일 상단에 <table>로 표시 (storage._format_category_comparison_section과 같은 정보, 렌더링만 표 형식).
+    <table>을 쓰는 이유: 이메일 클라이언트(특히 아웃룩)는 flex/grid 지원이 들쭉날쭉해도 표는 안정적으로 지원됨.
     """
     if not category_comparison:
         return ""
@@ -184,8 +185,7 @@ def render_email_html(week_label: str, domestic_summarized: list[dict], internat
                        failed_sources: list[str],
                        category_comparison: dict[str, dict[str, dict]] | None = None) -> str:
     """
-    scored.json과 동일한 데이터로 이메일 본문(HTML)을 만든다. summary.md와 정보량은 같고
-    렌더링만 헤더 배너 + 카드형 HTML로 다르다.
+    scored.json과 동일한 데이터로 이메일 본문(HTML)을 만든다. summary.md와 정보량은 같고 렌더링만 헤더 배너 + 카드형 HTML로 다르다.
     category_comparison이 있으면 제목 바로 아래 배치 (summary.md와 동일한 배치 원칙).
     """
     week_label_human = _humanize_week_label(week_label)

@@ -5,11 +5,10 @@ scorer.py
 이 모듈의 함수는 전부 "이슈 그룹"(같은 사건 기사 묶음, list[dict])을 입력으로 받는다.
 실제 그룹핑(BGE-M3)은 issue_grouper.group_issues()가 하고, 여기서는 결과를 스코어링만 함.
 
-`to_singleton_groups()`는 그룹핑이 없던 초기 개발 단계에 스코어링만 먼저 검증하려고
-만든 테스트용 유틸 - 지금은 실제 그룹핑 결과를 바로 넘기므로 사용되지 않음.
+`to_singleton_groups()`는 그룹핑이 없던 초기 개발 단계에 스코어링만 먼저 검증하려고 만든 테스트용 유틸.
+지금은 실제 그룹핑 결과를 바로 넘기므로 사용되지 않음.
 
-국내-해외 교차 매칭 🔗 태그는 score_group의 cross_axis_partner 필드로 구현 (main.py의
-score()가 채워줌 - 상세는 score_group docstring 참고).
+국내-해외 교차 매칭 🔗 태그는 score_group의 cross_axis_partner 필드로 구현 (main.py의 score()가 채워줌 - 상세는 score_group docstring 참고).
 """
 
 from collections import Counter, defaultdict
@@ -81,15 +80,13 @@ def score_group(group: list[dict], reference: datetime | None = None) -> dict:
     이슈 그룹 하나를 스코어링한다.
 
     반환값:
-      issue_score: Σ recency_weight(경과일수) - dedup 이후 기사 기준 (dedup은 점수 계산과
-                   화면 노출 숫자 양쪽에 동일 적용)
+      issue_score: Σ recency_weight(경과일수) - dedup 이후 기사 기준 (dedup은 점수 계산과 화면 노출 숫자 양쪽에 동일 적용)
       mention_count: dedup 이후 건수 (화면 노출용)
       raw_mention_count: dedup 이전 원본 건수 (data/scored.json에만 보존)
       titles / urls: 그룹 내 전체 제목/원문 링크 (LLM 요약 단계에서 사용)
       press_list: 참여 언론사 목록
-      cross_axis_partner: 같은 이슈가 국내/해외 양쪽에서 동시에 다뤄진 경우 반대 축 대표
-                   제목 (없으면 None). main.py의 score()가 국내/해외로 나누기 전
-                   article dict에 "_cross_axis_partner"(내부용)를 붙여두면 여기서 꺼내옴.
+      cross_axis_partner: 같은 이슈가 국내/해외 양쪽에서 동시에 다뤄진 경우 반대 축 대표 제목 (없으면 None).
+                          main.py의 score()가 국내/해외로 나누기 전 article dict에 "_cross_axis_partner"(내부용)를 붙여두면 여기서 꺼내옴.
     """
     raw_mention_count = len(group)
     deduped = dedup_group_by_press(group)
@@ -119,11 +116,11 @@ def score_group(group: list[dict], reference: datetime | None = None) -> dict:
 def score_and_rank(groups: list[list[dict]], top_n: int | None = None,
                     reference: datetime | None = None) -> list[dict]:
     """
-    이슈 그룹 리스트를 스코어링하고 issue_score 내림차순 정렬. top_n 지정 시 상위 N개만 반환
-    (main.py에서 LLM 요약 호출 전 top_n=5로 넘기면 "주간 Top 5" 운영이 됨).
+    이슈 그룹 리스트를 스코어링하고 issue_score 내림차순 정렬.
+    top_n 지정 시 상위 N개만 반환(main.py에서 LLM 요약 호출 전 top_n=5로 넘기면 "주간 Top 5" 운영이 됨).
 
-    각 축(국내/해외)의 원본 issue_score를 그대로 비교 - 정규화나 통합 종합 랭킹은 만들지 않음
-    (이 함수는 이미 한 축으로 분리된 groups만 받는다는 전제, 호출부가 국내/해외 각각 호출).
+    각 축(국내/해외)의 원본 issue_score를 그대로 비교 - 정규화나 통합 종합 랭킹은 만들지 않음.
+    (이 함수는 이미 한 축으로 분리된 groups만 받는다는 전제, 호출부가 국내/해외 각각 호출)
     """
     scored = [score_group(g, reference) for g in groups]
     scored.sort(key=lambda s: s["issue_score"], reverse=True)
@@ -137,9 +134,8 @@ def to_singleton_groups(articles: list[dict]) -> list[list[dict]]:
 
 def _is_korean_title(title: str, threshold: float = 0.2) -> bool:
     """
-    GDELT는 영어 키워드로 검색해도 한국어 기사가 번역 인덱싱으로 걸려 들어올 때가 있어서,
-    제목의 한글 비율이 threshold 이상이면 국내 기사로 판단한다. langdetect 등은 제목처럼
-    짧은 텍스트에서 신뢰도가 낮아, 결정론적인 한글 유니코드(U+AC00-D7A3) 비율 체크를 쓴다.
+    GDELT는 영어 키워드로 검색해도 한국어 기사가 번역 인덱싱으로 걸려 들어올 때가 있어서, 제목의 한글 비율이 threshold 이상이면 국내 기사로 판단한다.
+    langdetect 등은 제목처럼 짧은 텍스트에서 신뢰도가 낮아, 결정론적인 한글 유니코드(U+AC00-D7A3) 비율 체크를 쓴다.
     """
     if not title:
         return False
@@ -153,11 +149,9 @@ def _is_korean_title(title: str, threshold: float = 0.2) -> bool:
 def _is_korean_gdelt_article(article: dict) -> bool:
     """
     GDELT 기사가 실제로 한국어(국내) 기사인지 판단.
-    GDELT가 자체 판별한 "language" 필드가 있으면 우선 사용(제목 글자 수보다 신뢰도 높음),
-    없으면 _is_korean_title()로 fallback.
+    GDELT가 자체 판별한 "language" 필드가 있으면 우선 사용(제목 글자 수보다 신뢰도 높음), 없으면 _is_korean_title()로 fallback.
 
-    main.py의 score()와 split_domestic_international()이 이 함수 하나만 공유해서
-    국내/해외 판별 기준이 Top N 스코어링과 카테고리 집계 사이에서 어긋나지 않게 한다.
+    main.py의 score()와 split_domestic_international()이 이 함수 하나만 공유해서 국내/해외 판별 기준이 Top N 스코어링과 카테고리 집계 사이에서 어긋나지 않게 한다.
     """
     language = article.get("language")
     if language:
@@ -184,9 +178,8 @@ def split_domestic_international(articles: list[dict]) -> tuple[list[dict], list
 
 def _majority_category(group: list[dict]) -> str:
     """
-    그룹 내 가장 많이 나온 category를 대표로 정한다 (그룹 내 기사마다 사전 매칭이
-    미묘하게 다를 수 있어 다수결). 동률이면 먼저 나온 걸 유지 (Counter.most_common()은
-    안정정렬이라 삽입 순서 보존).
+    그룹 내 가장 많이 나온 category를 대표로 정한다 (그룹 내 기사마다 사전 매칭이 미묘하게 다를 수 있어 다수결).
+    동률이면 먼저 나온 걸 유지 (Counter.most_common()은 안정정렬이라 삽입 순서 보존).
     """
     counts = Counter(a.get("category", "기타") for a in group)
     return counts.most_common(1)[0][0]
@@ -195,13 +188,11 @@ def _majority_category(group: list[dict]) -> str:
 def score_by_category(groups: list[list[dict]], top_n: int,
                        exclude: tuple[str, ...] = ("기타",)) -> dict[str, list[dict]]:
     """
-    카테고리별 Top N. 국내/해외 축과 독립적인 카테고리 축을 만들되 국내/해외 구분은 유지 -
-    이 함수는 domestic_groups/international_groups 중 하나를 받아 그 축 안에서만
-    카테고리별로 나눈다 (main.py가 국내용/해외용으로 각각 호출).
+    카테고리별 Top N. 국내/해외 축과 독립적인 카테고리 축을 만들되 국내/해외 구분은 유지.
+    이 함수는 domestic_groups/international_groups 중 하나를 받아 그 축 안에서만 카테고리별로 나눈다 (main.py가 국내용/해외용으로 각각 호출).
 
     "기타"는 기본 제외 (카테고리별 Top N의 목적과 성격이 다름).
-    이슈 없는 카테고리는 결과 dict에 키 자체가 안 남음 (빈 리스트를 안 만들어서
-    "이슈 없음"과 "카테고리 자체 없음"을 구분할 필요를 없앰).
+    이슈 없는 카테고리는 결과 dict에 키 자체가 안 남음 (빈 리스트를 안 만들어서 "이슈 없음"과 "카테고리 자체 없음"을 구분할 필요를 없앰).
     """
     by_category: dict[str, list[list[dict]]] = defaultdict(list)
     for group in groups:
@@ -214,8 +205,7 @@ def score_by_category(groups: list[list[dict]], top_n: int,
     for category, cat_groups in by_category.items():
         ranked = score_and_rank(cat_groups, top_n=top_n)
         if ranked:
-            # 이후 단계에서 여러 카테고리 결과를 평평한 리스트로 합칠 때 원래 카테고리를
-            # 추적할 수 있도록 항목 자체에 남겨둠
+            # 이후 단계에서 여러 카테고리 결과를 평평한 리스트로 합칠 때 원래 카테고리를 추적할 수 있도록 항목 자체에 남겨둠
             for item in ranked:
                 item["category"] = category
             result[category] = ranked

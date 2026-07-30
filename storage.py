@@ -22,8 +22,8 @@ def previous_week_dir(base_dir: str = "data", reference: datetime | None = None)
     지난주의 'data/YYYY-WW' 경로 계산만 함("지난주 대비 증감"용) - week_dir()과 달리
     디렉토리를 만들지 않는 읽기 전용 조회.
 
-    "오늘 - 7일"의 ISO 주차를 그대로 사용 - 연도 경계(올해 1주차의 지난주 = 작년
-    마지막 주차)도 날짜 뺄셈이 자연스럽게 처리해줘서, 주차 번호를 직접 -1 하는 것보다 안전
+    "오늘 - 7일"의 ISO 주차를 그대로 사용
+    연도 경계(올해 1주차의 지난주 = 작년 마지막 주차)도 날짜 뺄셈이 자연스럽게 처리해줘서, 주차 번호를 직접 -1 하는 것보다 안전
     (직접 계산은 "1주차 - 1 = 0주차" 같은 존재하지 않는 값이 나올 위험).
     """
     now = reference or datetime.now(timezone.utc)
@@ -35,12 +35,10 @@ def previous_week_dir(base_dir: str = "data", reference: datetime | None = None)
 def week_dir(base_dir: str = "data", reference: datetime | None = None) -> str | None:
     """
     ISO 주차 기준 'data/YYYY-WW' 경로를 만들고(없으면 생성) 반환.
-    ISO 주차를 쓰는 이유: 달력 주와 달리 월요일 시작 + 연도 경계에서도 안 꼬여서
-    매주 월요일 실행 파이프라인과 잘 맞음.
+    ISO 주차를 쓰는 이유: 달력 주와 달리 월요일 시작 + 연도 경계에서도 안 꼬여서 매주 월요일 실행 파이프라인과 잘 맞음.
 
-    디렉토리 생성 실패 시(권한/디스크 등) 예외를 던지는 대신 로그 남기고 None 반환 -
-    호출부(save_week)가 저장 전체를 건너뛸 수 있게 함 (이미 끝난 수집/스코어링/요약
-    결과까지 날리면 안 됨).
+    디렉토리 생성 실패 시(권한/디스크 등) 예외를 던지는 대신 로그 남기고 None 반환
+      - 호출부(save_week)가 저장 전체를 건너뛸 수 있게 함 (이미 끝난 수집/스코어링/요약 결과까지 날리면 안 됨).
     """
     now = reference or datetime.now(timezone.utc)
     iso = now.isocalendar()
@@ -66,12 +64,11 @@ def _strip_scored_item(item: dict) -> dict:
 
 def save_raw(directory: str, articles: list[dict]) -> str | None:
     """
-    관련성 필터까지 통과해 실제 스코어링에 쓰인 기사 전체를 raw.json으로 저장한다 -
+    관련성 필터까지 통과해 실제 스코어링에 쓰인 기사 전체를 raw.json으로 저장한다.
     "raw"지만 수집 직후 원본이 아니라 "이번 주 분석에 실제로 쓰인 최종 데이터셋"이라는 의미.
     필터링 전 원본은 지금은 안 남김 (필요해지면 raw_unfiltered.json 등으로 추후 분리 가능).
 
-    파일 쓰기 실패 시 예외 대신 로그+None 반환 (이 시점엔 이미 수집/스코어링/요약이 끝난
-    뒤라, 저장 하나 실패했다고 전체를 죽여서 콘솔 결과 확인 기회까지 뺏으면 안 됨).
+    파일 쓰기 실패 시 예외 대신 로그+None 반환 (이 시점엔 이미 수집/스코어링/요약이 끝난 뒤라, 저장 하나 실패했다고 전체를 죽여서 콘솔 결과 확인 기회까지 뺏으면 안 됨).
     """
     cleaned = [_strip_body(a) for a in articles]
     path = os.path.join(directory, "raw.json")
@@ -94,12 +91,11 @@ def save_scored(directory: str, domestic_summarized: list[dict],
     """
     스코어링+요약 결과, 카테고리 집계, 실패 소스, GDELT 시계열을 scored.json 하나로 저장.
 
-    category_distribution을 저장해두는 이유(category_aggregator.py 참고): 다음 주 "지난주
-    대비 증감" 계산에 이번 주 집계가 필요하기 때문.
+    category_distribution을 저장해두는 이유(category_aggregator.py 참고): 다음 주 "지난주 대비 증감" 계산에 이번 주 집계가 필요하기 때문.
 
-    domestic/international_by_category(카테고리별 Top N)도 같이 저장 - scorer.score_by_category가
-    이미 각 항목에 category 필드를 남겨둬서 그대로 저장만 하면 됨. category_distribution(단순
-    개수 집계)과 이름이 헷갈리지 않게 별도 키로 구분.
+    domestic/international_by_category(카테고리별 Top N)도 같이 저장.
+    scorer.score_by_category가 이미 각 항목에 category 필드를 남겨둬서 그대로 저장만 하면 됨.
+    category_distribution(단순 개수 집계)과 이름이 헷갈리지 않게 별도 키로 구분.
 
     save_raw와 동일하게 파일 쓰기 실패를 로그+None으로 흡수.
     """
@@ -196,8 +192,7 @@ def save_summary_md(directory: str, week_label: str, domestic_summarized: list[d
     """
     사람이 바로 읽는 배포용 요약본 마크다운 파일 (요약 유무와 무관하게 원문 링크는 항상 포함).
 
-    국내/해외 각 섹션 밑에 카테고리별 Top N 하위 섹션 추가 (#### 레벨 - 국내/해외 ##보다
-    한 단계, 개별 이슈 제목 ###과도 안 겹침). 카테고리가 하나도 없으면 하위 섹션 생략.
+    국내/해외 각 섹션 밑에 카테고리별 Top N 하위 섹션 추가 (#### 레벨 - 국내/해외 ##보다 한 단계, 개별 이슈 제목 ###과도 안 겹침). 카테고리가 하나도 없으면 하위 섹션 생략.
     category_comparison이 있으면 문서 맨 앞(생성 시각 다음)에 증감 섹션 추가, None이면 생략.
 
     save_raw/save_scored와 동일하게 파일 쓰기 실패를 로그+None으로 흡수.
@@ -253,12 +248,10 @@ def save_week(articles: list[dict], domestic_summarized: list[dict],
               category_comparison: dict[str, dict[str, dict]] | None = None,
               base_dir: str = "data") -> str | None:
     """
-    main.py에서 부르는 단일 진입점. raw.json/scored.json/summary.md를 한 디렉토리에 저장하고
-    그 경로를 반환한다.
+    main.py에서 부르는 단일 진입점. raw.json/scored.json/summary.md를 한 디렉토리에 저장하고 그 경로를 반환한다.
 
     디렉토리 생성 실패 시 저장 전체를 포기하고 None 반환 (로그는 week_dir이 이미 남김).
-    디렉토리는 만들어졌는데 파일 하나가 실패하면 나머지는 계속 저장 시도하고, 끝난 뒤
-    무엇이 성공/실패했는지 요약 로그를 남긴다.
+    디렉토리는 만들어졌는데 파일 하나가 실패하면 나머지는 계속 저장 시도하고, 끝난 뒤 무엇이 성공/실패했는지 요약 로그를 남긴다.
     """
     directory = week_dir(base_dir)
     if directory is None:

@@ -63,8 +63,8 @@ LLM_MODEL_CHAIN_OPENROUTER = [m for _, m in _LLM_MODEL_CHAIN_OPENROUTER_ROLES]
 # OpenRouter 권장 헤더 (ASCII 전용 - 한글 넣으면 UnicodeEncodeError, issue_grouper.py에서 확인됨)
 _OPENROUTER_X_TITLE = "AI-IT-news-relevance-filter"
 
-# 한 번의 API 호출에 몇 건까지 같이 물어볼지. issue_grouper의 LLM_BATCH_SIZE(20)와 맞춤 -
-# 무료 라우터가 배치가 클 때 개수를 자주 못 맞추는 경향이 있어 20 유지.
+# 한 번의 API 호출에 몇 건까지 같이 물어볼지. issue_grouper의 LLM_BATCH_SIZE(20)와 맞춤
+#  - 무료 라우터가 배치가 클 때 개수를 자주 못 맞추는 경향이 있어 20 유지.
 BATCH_SIZE = 20
 
 # 기사 본문/요약 스니펫을 프롬프트에 넣을 때 자를 최대 길이. 판정엔 앞부분 몇 문장이면 충분.
@@ -72,8 +72,7 @@ SNIPPET_MAX_CHARS = 150
 
 
 _SYSTEM_PROMPT = (
-    # 영어로 작성 - 작은 무료 모델일수록 형식 지시 준수율이 더 안정적. 요약 프롬프트(llm_summarizer.py)는
-    # 결과물이 한국어라 한국어로 유지.
+    # 영어로 작성 - 작은 무료 모델일수록 형식 지시 준수율이 더 안정적.
     "You are a relevance classifier for an AI/IT industry news curation "
     "system. For each article, decide whether it substantively covers the "
     "\"AI industry\" or \"IT industry\" (artificial intelligence, specific "
@@ -150,8 +149,7 @@ def _snippet(article: dict) -> str | None:
 
 
 def _build_user_prompt(batch: list[dict]) -> str:
-    # 지시문은 영어. "category" 값(예: "기타")은 keyword_tagger.py가 정하는 한글 라벨이라
-    # 번역 대상 아님 - 지시문에 한글 값이 섞이는 건 정상.
+    # 지시문은 영어. "category" 값(예: "기타")은 keyword_tagger.py가 정하는 한글 라벨이라 번역 대상 아님 - 지시문에 한글 값이 섞이는 건 정상.
     lines = ["Judge whether each of the following articles is relevant to feed/livestock industry news.\n"]
     for idx, article in enumerate(batch, start=1):
         title = article.get("title", "")
@@ -202,17 +200,16 @@ def _request_llm_text(system_prompt: str, user_prompt: str, api_key: str, sessio
     """
     LLM_PROVIDER에 맞는 경로로 텍스트 응답을 받아온다.
 
-    openrouter면 _LLM_MODEL_CHAIN_OPENROUTER_ROLES(1순위->2순위->3순위->최종 안전망)를
-    순서대로 시도, 앞 모델이 실패하면 자동으로 다음 모델 재시도 - 특정 모델 하나의 문제가
-    이 함수를 부른 기능(관련성 필터/재분류/그룹핑/요약) 전체를 막지 않게 함. 최종 안전망까지
-    실패하면 예외를 올려보냄 - 호출부가 "배치 전체 안전 처리"로 흡수.
+    openrouter면 _LLM_MODEL_CHAIN_OPENROUTER_ROLES(1순위->2순위->3순위->최종 안전망)를 순서대로 시도, 앞 모델이 실패하면 자동으로 다음 모델 재시도
+      - 특정 모델 하나의 문제가 이 함수를 부른 기능(관련성 필터/재분류/그룹핑/요약) 전체를 막지 않게 함.
+      - 최종 안전망까지 실패하면 예외를 올려보냄 - 호출부가 "배치 전체 안전 처리"로 흡수.
 
     오류 코드를 역할별로 고정(RF-07~10)해서 어느 순위가 실패했는지 grep으로 바로 확인 가능.
     최종 안전망 실패는 🔴 조치필요, 그 전 순위 실패는 자동 복구되는 경로라 🟡 주의.
 
-    validate 콜백: 호출은 성공했는데 응답 형식이 이상한 경우도 호출 실패와 동일하게 취급해
-    같은 재시도 체인에 태운다. validate(text, is_final)가 예외를 던지면 다음 모델로 재시도
-    (is_final=True는 최종 안전망까지 온 시도라는 뜻 - 호출부가 예외를 던질지 부분 복구할지 판단).
+    validate 콜백: 호출은 성공했는데 응답 형식이 이상한 경우도 호출 실패와 동일하게 취급해 같은 재시도 체인에 태운다.
+    validate(text, is_final)가 예외를 던지면 다음 모델로 재시도.
+    (is_final=True는 최종 안전망까지 온 시도라는 뜻 - 호출부가 예외를 던질지 부분 복구할지 판단)
     """
 
     chain = _LLM_MODEL_CHAIN_OPENROUTER_ROLES
@@ -237,14 +234,14 @@ def _request_llm_text(system_prompt: str, user_prompt: str, api_key: str, sessio
 
 def _call_llm(batch: list[dict], api_key: str, session: requests.Session) -> list[bool] | None:
     """
-    LLM API를 한 번 호출해 batch 각각의 relevant 판정을 받아온다. 실패 시 None
-    (filter_articles가 그 배치를 전부 통과시킴).
+    LLM API를 한 번 호출해 batch 각각의 relevant 판정을 받아온다. 실패 시 None.
+    (filter_articles가 그 배치를 전부 통과시킴)
 
     session: filter_articles가 배치마다 반복 호출하므로 재사용해 커넥션 오버헤드 절감.
 
-    형식 이상/id 누락 모두 모델 체인 재시도 대상(_request_llm_text의 validate로 처리) -
-    최종 안전망까지 갔는데도 id가 누락되면 예외 대신 있는 만큼만 살리고 나머지는 안전한
-    기본값(통과)으로 채운다(RF-02 로그) - 완전 포기(RF-01)보다 부분 성공이 낫다는 원칙.
+    형식 이상/id 누락 모두 모델 체인 재시도 대상(_request_llm_text의 validate로 처리)
+      - 최종 안전망까지 갔는데도 id가 누락되면 예외 대신 있는 만큼만 살리고 나머지는 안전한 기본값(통과)으로 채운다(RF-02 로그).
+      - 완전 포기(RF-01)보다 부분 성공이 낫다는 원칙.
     """
     user_prompt = _build_user_prompt(batch)
 
@@ -293,12 +290,11 @@ def filter_articles(articles: list[dict]) -> list[dict]:
     API 키 없음/모든 배치 실패 시 원본 그대로 반환 (필터 안 거친 것과 동일한 안전한 기본값).
 
     ** WATT 소스는 LLM 호출 없이 자동 통과 **
-    WATT는 그 자체가 전문지라 이 필터가 잡으려는 오매칭 유형(동음이의어 등)이 구조적으로
-    해당 안 됨 - LLM 호출 없이 통과시켜 호출 수 절감. keyword_tagger.py의 site_category
-    판단 조건(source not in ("네이버", "GDELT"))과 동일 조건 재사용 - 같은 취약점도 그대로
-    적용됨(새 소스 추가 시 "WATT 취급"돼 자동 통과될 위험, 현재 계획 없어 그대로 둠).
-    자동 통과 기사가 반환 리스트 앞쪽에 모여 원래 수집 순서는 보존되지 않음 - 이후 단계는
-    순서 비의존이라 문제 없음.
+    WATT는 그 자체가 전문지라 이 필터가 잡으려는 오매칭 유형(동음이의어 등)이 구조적으로 해당 안 됨.
+      - LLM 호출 없이 통과시켜 호출 수 절감.
+      - keyword_tagger.py의 site_category 판단 조건(source not in ("네이버", "GDELT"))과 동일 조건 재사용.
+      - 같은 취약점도 그대로 적용됨(새 소스 추가 시 "WATT 취급"돼 자동 통과될 위험, 현재 계획 없어 그대로 둠).
+    자동 통과 기사가 반환 리스트 앞쪽에 모여 원래 수집 순서는 보존되지 않음 - 이후 단계는 순서 비의존이라 문제 없음.
     """
     if not articles:
         return articles
@@ -358,14 +354,13 @@ def filter_articles(articles: list[dict]) -> list[dict]:
 # 카테고리 재분류
 # ---------------------------------------------------------------------------
 #
-# keyword_tagger.py는 사전 단어가 제목에 있는지만 보고 category를 정하는데, relevance_filter는
-# 완전히 다른 기준(LLM의 관련성 판단)으로 판단한다 - 그래서 사전 매칭엔 안 걸려 category="기타"로
-# 붙었는데 relevance_filter가 "관련 있음"으로 확정한 기사가 생길 수 있다. 이 기사는 필터를
-# 통과하지만 category는 여전히 "기타"라, "기타" 제외 설계인 카테고리별 Top N엔 영원히 못 들어가는
-# 공백이 있었음 - 이 함수로 그 공백을 메운다.
+# keyword_tagger.py는 사전 단어가 제목에 있는지만 보고 category를 정하는데,
+# relevance_filter는 완전히 다른 기준(LLM의 관련성 판단)으로 판단한다.
+# 그래서 사전 매칭엔 안 걸려 category="기타"로 붙었는데 relevance_filter가 "관련 있음"으로 확정한 기사가 생길 수 있다.
+# 이 기사는 필터를 통과하지만 category는 여전히 "기타"라, "기타" 제외 설계인 카테고리별 Top N엔 영원히 못 들어가는 공백이 있었음.
+# 이 함수로 그 공백을 메운다.
 #
-# 관련성 판정의 이진 true/false 스키마는 안 건드리고(더 복잡한 스키마는 무료 모델 파싱 실패율을
-# 높임), 이미 관련 있다고 확정된 기사 중 category="기타"인 것만 별도 배치로 다시 LLM에 묻는다.
+# 관련성 판정의 이진 true/false 스키마는 안 건드리고(더 복잡한 스키마는 무료 모델 파싱 실패율을 높임), 이미 관련 있다고 확정된 기사 중 category="기타"인 것만 별도 배치로 다시 LLM에 묻는다.
 
 CATEGORY_RECLASSIFY_SYSTEM_PROMPT_TEMPLATE = (
     "You are a categorization assistant for a feed and livestock industry "
@@ -404,13 +399,13 @@ def _build_category_user_prompt(batch: list[dict]) -> str:
 def _call_category_llm(batch: list[dict], api_key: str, session: requests.Session,
                         category_choices: list[str], system_prompt: str) -> list[str] | None:
     """
-    _call_llm과 같은 호출/방어 패턴을 재분류용으로 재사용. 다른 점: 응답이 bool이 아니라
-    category_choices 중 하나(또는 "기타") 문자열이어야 하고, 목록에 없는 값은 개별 항목만
-    무시(안 바뀜="기타" 유지, id 누락과 동일하게 처리).
+    _call_llm과 같은 호출/방어 패턴을 재분류용으로 재사용.
+    다른 점: 응답이 bool이 아니라 category_choices 중 하나(또는 "기타") 문자열이어야 하고, 목록에 없는 값은 개별 항목만 무시(안 바뀜="기타" 유지, id 누락과 동일하게 처리).
 
     형식 이상/id 누락 모두 모델 체인 재시도 대상 - 최종 안전망까지 갔는데도 누락이면 있는 만큼만
     살리고 나머지는 "기타"로 채워 반환(RF-05 로그) - 완전 포기(RF-04)보다 부분 성공이 낫다는 원칙.
     """
+
     user_prompt = _build_category_user_prompt(batch)
     valid_choices = set(category_choices) | {"기타"}
 
@@ -458,8 +453,7 @@ def _call_category_llm(batch: list[dict], api_key: str, session: requests.Sessio
 def recategorize_uncategorized(articles: list[dict]) -> list[dict]:
     """
     filter_articles()를 통과했지만 category="기타"로 남은 기사를 LLM으로 재분류.
-    main.py에서 filter_articles() 바로 다음 단계로 호출. API 키 없음/전부 실패해도
-    안전하게 원본 그대로 반환.
+    main.py에서 filter_articles() 바로 다음 단계로 호출. API 키 없음/전부 실패해도 안전하게 원본 그대로 반환.
     """
     targets = [a for a in articles if a.get("category") == "기타"]
     if not targets:

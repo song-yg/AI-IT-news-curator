@@ -4,9 +4,7 @@ llm_summarizer.py
 
 ** 프로바이더 설정을 issue_grouper.py에서 재사용 **
 LLM_PROVIDER/모델명/API URL/X-Title 상수를 새로 정의하지 않고 issue_grouper.py에서 import.
-이 값들에서 실제로 버그를 겪었던 적이 있어서(① GitHub Actions 미등록 Variable이 빈 문자열로
-넘어와 os.environ.get(key, default)가 기본값을 못 씀, ② X-Title에 한글 넣었다가 HTTP 헤더는
-latin-1만 허용돼 UnicodeEncodeError) 이미 검증된 값을 그대로 재사용해 같은 버그 재현을 막는다.
+이 값들에서 실제로 버그를 겪었던 적이 있어서 이미 검증된 값을 그대로 재사용해 같은 버그 재현을 막는다.
 
 ** (A)/(A-1) 안전장치 **
 API 키 없음/LLM 호출·응답 실패 시 요약을 생략하고 원문 제목만 노출하는 쪽으로 fallback한다.
@@ -32,11 +30,11 @@ _MAX_CONTEXT_ARTICLES = 5
 _MAX_BODY_EXCERPT_CHARS = 300
 
 # --- 단독 기사 본문 추가 수집 ---
-# 네이버/GDELT는 본문을 못 가져와서 "재료 부족"으로 요약이 생략되는 경우가 많았다. 대신
-# trafilatura(범용 본문 추출)로 시도해본다 - 사이트별 맞춤 셀렉터가 없어 성공률은 사이트마다
-# 다르고(광고를 본문으로 착각, JS 렌더링 사이트는 못 뽑음, WATT처럼 403 걸리는 사이트도 있음),
-# 실패해도 기존처럼 "재료 부족 -> 요약 생략" fallback이라 지금보다 나빠지지 않는다.
-# 비용 통제를 위해 "재료 부족 판정이 실제로 난 시점", 그것도 이미 Top N으로 추려진 기사에만 시도.
+# 네이버/GDELT는 본문을 못 가져와서 "재료 부족"으로 요약이 생략되는 경우가 많았다.
+# 대신 trafilatura(범용 본문 추출)로 시도해본다.
+#  - 사이트별 맞춤 셀렉터가 없어 성공률은 사이트마다 다르고(광고를 본문으로 착각, JS 렌더링 사이트는 못 뽑음, 403 걸리는 사이트도 있음),
+#    실패해도 기존처럼 "재료 부족 -> 요약 생략" fallback이라 지금보다 나빠지지 않는다.
+#    비용 통제를 위해 "재료 부족 판정이 실제로 난 시점", 그것도 이미 Top N으로 추려진 기사에만 시도.
 _BODY_FETCH_TIMEOUT_SECONDS = 10
 _BODY_FETCH_MIN_LENGTH = 200  # has_substantial_material의 본문 기준과 동일
 
@@ -48,8 +46,7 @@ _TRAFILATURA_CONFIG.set("DEFAULT", "DOWNLOAD_TIMEOUT", str(_BODY_FETCH_TIMEOUT_S
 def _build_user_prompt(item: dict) -> str:
     """
     이슈 하나(scorer.score_group() 결과 dict)를 LLM 프롬프트로 만든다.
-    제목 + (있으면) 본문 핵심 문장 + (네이버 소스면) description을 참고 컨텍스트로 추가
-    (그대로 인용하지 않고 참고용으로만).
+    제목 + (있으면) 본문 핵심 문장 + (네이버 소스면) description을 참고 컨텍스트로 추가 (그대로 인용하지 않고 참고용으로만).
     """
     titles = item.get("titles", [])
     lines = ["다음은 같은 이슈를 다룬 기사 제목들이다:"]
@@ -123,18 +120,17 @@ def _request_anthropic(system_prompt: str, user_prompt: str, api_key: str, sessi
 
 def _call_llm(system_prompt: str, user_prompt: str, api_key: str, session: requests.Session) -> str | None:
     """
-    issue_grouper.py의 프로바이더 설정으로 LLM을 호출하고 응답 텍스트 반환. 실패 시 None
-    (호출부가 "요약 생략, 원문 제목만"으로 fallback).
+    issue_grouper.py의 프로바이더 설정으로 LLM을 호출하고 응답 텍스트 반환.
+    실패 시 None (호출부가 "요약 생략, 원문 제목만"으로 fallback).
 
-    issue_grouper의 3차 호출과 요청 형식은 비슷하지만 파싱 방식(자연어 vs JSON 배열)이 달라
-    별도 함수로 둠. temperature/max_tokens도 요약용으로 다르게 줘서 헬퍼를 그대로 재사용하지 않음.
+    issue_grouper의 3차 호출과 요청 형식은 비슷하지만 파싱 방식(자연어 vs JSON 배열)이 달라 별도 함수로 둠.
+    temperature/max_tokens도 요약용으로 다르게 줘서 헬퍼를 그대로 재사용하지 않음.
 
     session: summarize_top_issues가 이슈마다 반복 호출하므로 재사용해 커넥션 오버헤드 절감.
 
     ** 지정 모델 실패 시 다음 후보 모델로 자동 재시도 **
-    openrouter면 _ig._LLM_MODEL_CHAIN_OPENROUTER_ROLES(1순위 -> 2순위 -> 3순위 -> 최종 안전망
-    openrouter/free)를 순서대로 시도 - 특정 모델 하나의 문제(오타, 무료 티어 이탈 등)가
-    이번 실행의 요약 기능 전체를 막지 않게 함. 최종 안전망까지 실패해야 최종 실패.
+    openrouter면 _ig._LLM_MODEL_CHAIN_OPENROUTER_ROLES(1순위 -> 2순위 -> 3순위 -> 최종 안전망 openrouter/free)를 순서대로 시도.
+      - 특정 모델 하나의 문제(오타, 무료 티어 이탈 등)가 이번 실행의 요약 기능 전체를 막지 않게 함. 최종 안전망까지 실패해야 최종 실패.
     """
     data = None  # 응답 자체를 못 받았을 수도 있어 미리 초기화
     try:
@@ -171,10 +167,9 @@ def _call_llm(system_prompt: str, user_prompt: str, api_key: str, session: reque
 
 def _is_suspicious_summary(text: str) -> bool:
     """
-    OpenRouter 무료 라우터(openrouter/free)가 정상 요약 대신 콘텐츠 안전성 판정 텍스트
-    ("User Safety: safe")를 그대로 반환하는 경우가 있다 (원인 미확인 - 무료 라우터가 요청마다
-    다른 실제 모델로 라우팅되는 것으로 추정). 실제로 관측된 좁은 패턴만 걸러낸다 - 넓히면
-    정상 요약도 걸러질 위험이 있어서, 낮은 품질/짧은 요약까지 거르는 건 범위 밖.
+    OpenRouter 무료 라우터(openrouter/free)가 정상 요약 대신 콘텐츠 안전성 판정 텍스트("User Safety: safe")를 그대로 반환하는 경우가 있다.
+    (원인 미확인 - 무료 라우터가 요청마다 다른 실제 모델로 라우팅되는 것으로 추정)
+    실제로 관측된 좁은 패턴만 걸러낸다 - 넓히면 정상 요약도 걸러질 위험이 있어서, 낮은 품질/짧은 요약까지 거르는 건 범위 밖.
     """
     return "user safety" in text.lower()
 
@@ -200,11 +195,11 @@ def _fetch_body_via_trafilatura(url: str) -> str | None:
 
 def summarize_issue(item: dict, session: requests.Session | None = None) -> dict:
     """
-    이슈 하나에 (A)/(A-1) 로직을 적용해 요약을 붙인다. 원본 item은 변경하지 않고 얕은 복사본을
-    반환한다 (호출부가 리스트를 여러 번 다룰 수 있어 부작용 없는 편이 안전).
+    이슈 하나에 (A)/(A-1) 로직을 적용해 요약을 붙인다.
+    원본 item은 변경하지 않고 얕은 복사본을 반환한다 (호출부가 리스트를 여러 번 다룰 수 있어 부작용 없는 편이 안전).
 
-    session: 안 넘기면 호출 하나짜리 임시 세션 사용 (summarize_top_issues처럼 여러 건을 처리할
-    때만 세션을 만들어 넘기면 재사용 이득이 있음).
+    session: 안 넘기면 호출 하나짜리 임시 세션 사용
+    (summarize_top_issues처럼 여러 건을 처리할 때만 세션을 만들어 넘기면 재사용 이득이 있음)
 
     반환값에 추가되는 필드:
       summary: LLM이 생성한 2~3문장 요약, 또는 None(생략된 경우)
@@ -281,11 +276,9 @@ def summarize_issue(item: dict, session: requests.Session | None = None) -> dict
 
 def summarize_top_issues(ranked_items: list[dict], label: str = "") -> list[dict]:
     """
-    scorer.score_and_rank() 결과 전체에 summarize_issue를 적용 (main.py의 4단계 호출부에서
-    국내/해외 각각 부름).
+    scorer.score_and_rank() 결과 전체에 summarize_issue를 적용 (main.py의 4단계 호출부에서 국내/해외 각각 부름).
 
-    이슈 하나당 LLM 호출이 몇 초~몇십 초 걸릴 수 있어(무료 모델은 특히), 항목 하나 처리할
-    때마다 바로 로그를 찍어 실행 상태를 실시간으로 볼 수 있게 한다.
+    이슈 하나당 LLM 호출이 몇 초~몇십 초 걸릴 수 있어(무료 모델은 특히), 항목 하나 처리할 때마다 바로 로그를 찍어 실행 상태를 실시간으로 볼 수 있게 한다.
     """
     results = []
     total = len(ranked_items)

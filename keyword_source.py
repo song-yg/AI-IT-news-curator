@@ -2,8 +2,8 @@
 keyword_source.py
 구글 시트에서 키워드 목록을 읽어오는 공용 모듈.
 
-시트를 "웹에 게시(CSV)"해두면 인증 없이 GET으로 읽을 수 있어서, 코드 배포/GitHub 권한 없이
-구글 시트 편집 권한만으로 키워드를 추가/수정할 수 있다.
+시트를 "웹에 게시(CSV)"해두면 인증 없이 GET으로 읽을 수 있어서,
+코드 배포/GitHub 권한 없이 구글 시트 편집 권한만으로 키워드를 추가/수정할 수 있다.
 
 시트 형식 (컬럼: keyword, lang, active, note):
   - keyword: 검색어 (naver_collector는 ko 행, gdelt_collector는 en 행을 사용)
@@ -20,8 +20,8 @@ import io
 import os
 import requests
 
-# 프로세스 내 캐시. naver/gdelt collector가 각각 "ko"/"en"으로 호출해도 같은 CSV를
-# 두 번 요청하지 않도록 함. 한 실행 안에서만 유효 (주 1회 실행, 실행 도중 시트 변경 반영 요구사항 없음).
+# 프로세스 내 캐시. naver/gdelt collector가 각각 "ko"/"en"으로 호출해도 같은 CSV를 두 번 요청하지 않도록 함.
+# 한 실행 안에서만 유효 (주 1회 실행, 실행 도중 시트 변경 반영 요구사항 없음).
 _cache: dict[str, list[dict] | None] = {}
 
 
@@ -57,8 +57,8 @@ def _is_active(row: dict) -> bool:
 
 def _detect_keyword_lang(keyword: str) -> str:
     """
-    키워드 글자 구성으로 실제 언어 판별 ("ko"/"en") - 시트 lang 컬럼은 사람이 입력하는 값이라
-    실수로 뒤바뀔 수 있어서, 한글 비율 기준(scorer._is_korean_title()과 동일 방식)으로 재확인.
+    키워드 글자 구성으로 실제 언어 판별 ("ko"/"en")
+      - 시트 lang 컬럼은 사람이 입력하는 값이라 실수로 뒤바뀔 수 있어서, 한글 비율 기준(scorer._is_korean_title()과 동일 방식)으로 재확인.
     """
     if not keyword:
         return "en"

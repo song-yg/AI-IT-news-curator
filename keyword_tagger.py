@@ -34,8 +34,6 @@ CATEGORY_KEYWORDS = {
     },
 }
 
-# 사료·축산 도메인 시절엔 "AI"가 인공수정 등으로 오매칭될 위험이 커서 제외했었으나,
-# 지금은 도메인 자체가 AI 산업이라 핵심 매칭어이므로 제외하지 않는다. "ND"(뉴캣슬병)도 정리.
 EXCLUDED_TERMS: set[str] = set()
 
 
@@ -76,9 +74,9 @@ def _dedupe_contained(terms: list[str]) -> list[str]:
 
 def tag_title(title: str) -> tuple[str, list[str]]:
     """
-    제목을 카테고리에 매칭. 대소문자 무시 부분 문자열 매칭, 카테고리별 매칭 개수가
-    가장 많은 쪽을 채택 (한 제목이 여러 카테고리에 걸칠 수 있음). 동점 시 CATEGORY_KEYWORDS
-    사전 순서(정의 순위 아님, 실행마다 결과 안 흔들리게 하기 위한 결정적 규칙)로 채택.
+    제목을 카테고리에 매칭.
+    대소문자 무시 부분 문자열 매칭, 카테고리별 매칭 개수가 가장 많은 쪽을 채택 (한 제목이 여러 카테고리에 걸칠 수 있음).
+    동점 시 CATEGORY_KEYWORDS 사전 순서(정의 순위 아님, 실행마다 결과 안 흔들리게 하기 위한 결정적 규칙)로 채택.
 
     _dedupe_contained로 "corn"/"corn futures" 같은 포함 관계 매칭은 하나로 셈.
 
@@ -108,8 +106,8 @@ def tag_articles(articles: list[dict]) -> list[dict]:
     기사 리스트 전체에 카테고리를 매김 (in-place로 "category" 필드 채움).
 
     WATT_collector는 사이트 자체 분류(예: "Poultry")를 이미 "category"에 채워서 넘기지만,
-    이 함수는 소스 상관없이 우리 시스템 통일 카테고리 체계로 덮어쓴다. 정보 손실 방지를 위해
-    WATT의 원래 값은 "site_category"에 별도 보존.
+    이 함수는 소스 상관없이 우리 시스템 통일 카테고리 체계로 덮어쓴다.
+    정보 손실 방지를 위해 WATT의 원래 값은 "site_category"에 별도 보존.
     """
     other_count = 0
     for article in articles:
@@ -147,8 +145,8 @@ def print_uncategorized_sample(articles: list[dict], sample_size: int = 30) -> N
     '기타' 분류 기사 제목 샘플 출력 - '기타' 비율이 높을 때 실제로 뭐가 몰리는지 눈으로 확인용.
     무작위가 아니라 리스트 앞에서부터 그대로 보여줌 (감 잡기용 진단 도구, 통계용 아님).
 
-    main.py 정규 실행 경로에서는 호출 안 함 (매번 최대 30건 나열하면 로그가 길어짐) -
-    사전 보강 필요할 때 직접 불러쓰는 진단 도구.
+    main.py 정규 실행 경로에서는 호출 안 함 (매번 최대 30건 나열하면 로그가 길어짐)
+      - 사전 보강 필요할 때 직접 불러쓰는 진단 도구.
     """
     uncategorized = [a for a in articles if a.get("category", "기타") == "기타"]
     total = len(uncategorized)
