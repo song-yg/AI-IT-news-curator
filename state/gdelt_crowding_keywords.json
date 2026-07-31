@@ -1,14 +1,14 @@
 {
   "Artificial intelligence": {
-    "crowd_count": 2,
-    "last_seen": "2026-07-30T07:58:03.249574+00:00"
+    "crowd_count": 3,
+    "last_seen": "2026-07-31T08:57:06.239433+00:00"
   },
   "nvidia": {
-    "crowd_count": 2,
-    "last_seen": "2026-07-30T07:58:03.249574+00:00"
+    "crowd_count": 3,
+    "last_seen": "2026-07-31T08:57:06.239433+00:00"
   },
   "claude": {
-    "crowd_count": 2,
-    "last_seen": "2026-07-30T07:58:03.249574+00:00"
+    "crowd_count": 3,
+    "last_seen": "2026-07-31T08:57:06.239433+00:00"
   }
 }
