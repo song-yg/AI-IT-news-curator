@@ -20,6 +20,7 @@ relevance_filter.py
 
 import json
 import os
+import time
 
 import requests
 
@@ -69,6 +70,30 @@ BATCH_SIZE = 20
 
 # 기사 본문/요약 스니펫을 프롬프트에 넣을 때 자를 최대 길이. 판정엔 앞부분 몇 문장이면 충분.
 SNIPPET_MAX_CHARS = 150
+
+# 관련성 필터(filter_articles) 전체(모든 배치 합산)에 허용하는 최대 시간.
+# issue_grouper.TIME_BUDGET_SECONDS와 같은 목적/근거(무료 티어 모델 체인이 배치당
+# 최대 4단계까지 순차 폴백하며 각 단계 최대 30초까지 기다릴 수 있음) - 다만 이 단계는
+# 네이버/GDELT 수집 결과 전체(기사량 많은 주엔 수백~수천 건)가 그대로 대상이라 issue_grouper의
+# 애매 구간(borderline_pairs, 이미 걸러진 부분집합)보다 배치 수가 더 많이 나올 수 있어 예산을
+# 조금 더 넉넉하게 잡는다. 예산을 넘기면 남은 배치는 이번 실행에서 건너뛰고 이 필터의 안전한
+# 기본값인 "통과"로 전부 살려서 다음 단계로 넘긴다(관련 없는 기사 몇 개가 더 섞이는 것이 관련
+# 기사를 잘못 거르는 것보다 손실이 적다는 이 모듈의 기존 방침과 동일).
+#
+# main.py의 파이프라인 전역 공유 예산 체계로 전환됨 - filter_articles가 deadline을
+# 넘겨받으면 그걸 쓰고, 아래 값은 못 받았을 때(standalone 테스트 등)만 쓴다.
+TIME_BUDGET_SECONDS = 120 * 60  # 120분(standalone 기본값 - 정상 실행에선 main.py의 deadline이 우선)
+
+# 카테고리 재분류(recategorize_uncategorized) 전체에 허용하는 최대 시간.
+# 위 TIME_BUDGET_SECONDS(관련성 필터용)와 같은 근거지만, 이쪽은 대상 자체가
+# "관련성 필터를 통과했는데 사전 매칭에 안 걸려 기타로 남은" 훨씬 좁은 부분집합이라
+# 배치 수가 그만큼 적게 나올 걸로 보고 예산도 더 짧게 잡는다. 초과분은 이미 "기타"인
+# 상태 그대로 두면 되므로(재분류 자체가 "기타 -> 더 나은 카테고리"로 승격만 시도하는
+# 것) 남은 항목은 그냥 손 안 대고 건너뛴다.
+#
+# main.py의 파이프라인 전역 공유 예산 체계로 전환됨 - recategorize_uncategorized가
+# deadline을 넘겨받으면 그걸 쓰고, 아래 값은 못 받았을 때(standalone 테스트 등)만 쓴다.
+CATEGORY_RECLASSIFY_TIME_BUDGET_SECONDS = 45 * 60  # 45분(standalone 기본값 - 정상 실행에선 main.py의 deadline이 우선)
 
 
 _SYSTEM_PROMPT = (
@@ -284,10 +309,14 @@ def _call_llm(batch: list[dict], api_key: str, session: requests.Session) -> lis
         return None
 
 
-def filter_articles(articles: list[dict]) -> list[dict]:
+def filter_articles(articles: list[dict], deadline: float | None = None) -> list[dict]:
     """
     정규화+태깅이 끝난 articles를 받아 LLM이 "관련 없다"고 확실히 판단한 것만 걸러낸다.
     API 키 없음/모든 배치 실패 시 원본 그대로 반환 (필터 안 거친 것과 동일한 안전한 기본값).
+
+    deadline: time.monotonic() 기준 절대 마감 시각. main.py가 파이프라인 전역 공유 예산에서
+    계산해 넘겨준다 - 안 넘겨받으면(예: 이 모듈만 따로 테스트) 이 모듈 자체 기본값
+    (TIME_BUDGET_SECONDS)으로 지금 시각 기준 마감을 계산한다.
 
     ** WATT 소스는 LLM 호출 없이 자동 통과 **
     WATT는 그 자체가 전문지라 이 필터가 잡으려는 오매칭 유형(동음이의어 등)이 구조적으로 해당 안 됨.
@@ -324,8 +353,22 @@ def filter_articles(articles: list[dict]) -> list[dict]:
     kept = list(watt_articles)
     dropped_samples = []
     total_batches = (len(llm_target_articles) + BATCH_SIZE - 1) // BATCH_SIZE
+    effective_deadline = deadline if deadline is not None else time.monotonic() + TIME_BUDGET_SECONDS
+    skipped_count = 0
+
+    def _over_budget() -> bool:
+        return time.monotonic() >= effective_deadline
+
     with requests.Session() as session:
         for batch_num, i in enumerate(range(0, len(llm_target_articles), BATCH_SIZE), start=1):
+            if _over_budget():
+                remaining = llm_target_articles[i:]
+                skipped_count = len(remaining)
+                kept.extend(remaining)  # 안 본 만큼 안전한 기본값(통과)으로 살림
+                print(f"[relevance_filter] 🟡 주의 - 관련성 필터 시간 예산 소진(전역 파이프라인 마감 도달) - "
+                      f"남은 {skipped_count}건은 이번 실행에서 건너뛰고 전부 통과 처리")
+                break
+
             batch = llm_target_articles[i:i + BATCH_SIZE]
             print(f"[relevance_filter] 배치 {batch_num}/{total_batches} 처리 중 ({len(batch)}건)")
             results = _call_llm(batch, api_key, session)
@@ -340,7 +383,8 @@ def filter_articles(articles: list[dict]) -> list[dict]:
 
     dropped_count = len(articles) - len(kept)
     print(f"[relevance_filter] 관련성 필터 완료 - 전체 {len(articles)}건(WATT 자동통과 "
-          f"{len(watt_articles)}건 포함) 중 {dropped_count}건 제외, {len(kept)}건 유지")
+          f"{len(watt_articles)}건 포함) 중 {dropped_count}건 제외, {len(kept)}건 유지"
+          + (f" (시간 예산 소진으로 {skipped_count}건 미검증 통과 포함)" if skipped_count else ""))
     if dropped_samples:
         sample_n = min(10, len(dropped_samples))
         print(f"[relevance_filter] 제외된 기사 샘플 (최대 {sample_n}건):")
@@ -450,10 +494,12 @@ def _call_category_llm(batch: list[dict], api_key: str, session: requests.Sessio
         return None
 
 
-def recategorize_uncategorized(articles: list[dict]) -> list[dict]:
+def recategorize_uncategorized(articles: list[dict], deadline: float | None = None) -> list[dict]:
     """
     filter_articles()를 통과했지만 category="기타"로 남은 기사를 LLM으로 재분류.
     main.py에서 filter_articles() 바로 다음 단계로 호출. API 키 없음/전부 실패해도 안전하게 원본 그대로 반환.
+
+    deadline: filter_articles()와 동일 - main.py의 파이프라인 전역 공유 예산에서 계산해 넘겨준다.
     """
     targets = [a for a in articles if a.get("category") == "기타"]
     if not targets:
@@ -476,9 +522,22 @@ def recategorize_uncategorized(articles: list[dict]) -> list[dict]:
           f"model={model_desc}, 대상 {len(targets)}건('기타'로 남았지만 관련성 확인된 기사)")
 
     reclassified_count = 0
+    skipped_count = 0
     total_batches = (len(targets) + BATCH_SIZE - 1) // BATCH_SIZE
+    effective_deadline = (deadline if deadline is not None
+                           else time.monotonic() + CATEGORY_RECLASSIFY_TIME_BUDGET_SECONDS)
+
+    def _over_budget() -> bool:
+        return time.monotonic() >= effective_deadline
+
     with requests.Session() as session:
         for batch_num, i in enumerate(range(0, len(targets), BATCH_SIZE), start=1):
+            if _over_budget():
+                skipped_count = len(targets) - i
+                print(f"[relevance_filter] 🟡 주의 - 카테고리 재분류 시간 예산 소진(전역 파이프라인 마감 도달) - "
+                      f"남은 {skipped_count}건은 이번 실행에서 건너뛰고 '기타' 유지")
+                break
+
             batch = targets[i:i + BATCH_SIZE]
             print(f"[relevance_filter] 카테고리 재분류 배치 {batch_num}/{total_batches} "
                   f"처리 중 ({len(batch)}건)")
@@ -491,6 +550,7 @@ def recategorize_uncategorized(articles: list[dict]) -> list[dict]:
                     reclassified_count += 1
 
     print(f"[relevance_filter] 카테고리 재분류 완료 - {len(targets)}건 중 "
-          f"{reclassified_count}건 재분류됨, {len(targets) - reclassified_count}건 '기타' 유지")
+          f"{reclassified_count}건 재분류됨, {len(targets) - reclassified_count}건 '기타' 유지"
+          + (f" (그중 {skipped_count}건은 시간 예산 소진으로 미시도)" if skipped_count else ""))
 
     return articles

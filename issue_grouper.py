@@ -16,6 +16,7 @@ score() 안에서 국내/해외 Top N과 카테고리별 Top N 각각에 stage4_
 import csv
 import json
 import os
+import time
 from itertools import combinations
 
 import requests
@@ -349,6 +350,19 @@ LLM_MODEL_CHAIN_OPENROUTER = [m for _, m in _LLM_MODEL_CHAIN_OPENROUTER_ROLES]
 
 LLM_BATCH_SIZE = 20  # 한 번의 API 호출에 몇 쌍까지 같이 물어볼지 (호출 수 절약, OpenRouter 무료 티어 분당/일 요청 한도 감안해도 안전한 크기)
 
+# 3차 LLM 보조 전체(모든 배치 합산)에 허용하는 최대 시간.
+# gdelt_collector.TIME_BUDGET_SECONDS와 같은 목적/근거(무료 티어 모델은 배치당 최대
+# len(_LLM_MODEL_CHAIN_OPENROUTER_ROLES)단계(1순위->2순위->3순위->최종 안전망)까지
+# 순차 폴백하며 각 단계 최대 30초(_request_openrouter의 timeout)까지 기다릴 수 있어서,
+# 애매 구간 쌍이 많은 실행(예: 기사량이 많은 주에는 borderline_pairs가 수백~수천 쌍)에서는
+# 배치가 누적되면서 이 단계 하나가 GitHub Actions 잡 타임아웃(360분)을 위협할 수 있다.
+# 예산을 넘기면 남은 배치는 이번 실행에서 건너뛰고(그 쌍들은 안전한 기본값인 "안 묶음" 유지),
+# 이미 처리된 배치 결과는 그대로 살려서 다음 단계로 넘어간다.
+#
+# main.py의 파이프라인 전역 공유 예산 체계로 전환됨 - stage3_llm_assist/group_issues가
+# deadline을 넘겨받으면 그걸 쓰고, 아래 값은 못 받았을 때(standalone 테스트 등)만 쓴다.
+TIME_BUDGET_SECONDS = 90 * 60  # 90분(standalone 기본값 - 정상 실행에선 main.py의 deadline이 우선)
+
 # OpenRouter 요청에 붙이는 선택적 식별 헤더. HTTP 헤더 값은 latin-1(ASCII 계열) 인코딩만 허용되므로 반드시 ASCII 문자열이어야 한다.
 # - 한글을 넣으면 매 배치가 UnicodeEncodeError로 죽는다(아래 자체 테스트에 이 상수의 ASCII 여부를 검증하는 assert가 있음).
 _OPENROUTER_X_TITLE = "AI-IT-news-issue-grouping-stage3"
@@ -505,7 +519,8 @@ def _call_llm(pairs: list[tuple[dict, dict, float]], api_key: str, session: requ
     return results
 
 
-def stage3_llm_assist(borderline_pairs: list[tuple[dict, dict, float]]) -> list[tuple[dict, dict, float]]:
+def stage3_llm_assist(borderline_pairs: list[tuple[dict, dict, float]],
+                       deadline: float | None = None) -> list[tuple[dict, dict, float]]:
     """
     2차에서 애매 구간에 걸린 쌍들을 LLM에 물어봐서, "같은 사건"으로 확정된 쌍만 골라 반환한다 (그룹을 지우는 게 아니라 묶을지 말지만 판단).
 
@@ -516,6 +531,13 @@ def stage3_llm_assist(borderline_pairs: list[tuple[dict, dict, float]]) -> list[
 
     해당 키가 없거나 모든 배치 호출이 실패하면, "안 묶음" 보수적 기본값으로 안전하게 fallback한다.
      - 이 경우 group_issues의 최종 결과는 3차가 아예 없던 이전 동작과 동일해지므로 전체 파이프라인이 죽지 않는다.
+
+    deadline: time.monotonic() 기준 절대 마감 시각. main.py가 파이프라인 전체 공유 예산에서
+    계산해 넘겨준다 - 넘겨받으면 그 시각을 그대로 쓰고, 안 넘겨받으면(예: 이 모듈만 따로
+    테스트하는 경우) 이 모듈 자체 기본값(TIME_BUDGET_SECONDS)으로 지금 시각 기준 마감을 계산한다.
+    group_issues() 안에서 이 함수가 두 번(borderline_pairs 1차 확인 + _merge_confirmed_components의
+    extra_confirm 콜백) 호출될 수 있는데, 같은 deadline 값을 그대로 넘겨받으므로 두 호출이 같은
+    마감을 공유한다(첫 호출이 시간을 많이 썼으면 두 번째 호출의 실제 여유는 자동으로 줄어듦).
     """
     if not borderline_pairs:
         return []
@@ -531,9 +553,22 @@ def stage3_llm_assist(borderline_pairs: list[tuple[dict, dict, float]]) -> list[
     print(f"[issue_grouper] 3차 LLM 보조 시작 - provider={LLM_PROVIDER}, model={model_desc}, "
           f"대상 {len(borderline_pairs)}쌍")
 
+    effective_deadline = deadline if deadline is not None else time.monotonic() + TIME_BUDGET_SECONDS
+
+    def _over_budget() -> bool:
+        return time.monotonic() >= effective_deadline
+
     confirmed = []
+    skipped_pairs = 0
     with requests.Session() as session:
         for i in range(0, len(borderline_pairs), LLM_BATCH_SIZE):
+            if _over_budget():
+                skipped_pairs = len(borderline_pairs) - i
+                print(f"[issue_grouper] 🟡 주의 - 3차 LLM 보조 시간 예산 소진(전역 파이프라인 마감 도달) - "
+                      f"남은 {skipped_pairs}쌍은 이번 실행에서 건너뜀('안 묶음' 기본값 유지, "
+                      f"이미 처리된 {i}쌍 결과는 그대로 사용)")
+                break
+
             batch = borderline_pairs[i:i + LLM_BATCH_SIZE]
             results = _call_llm(batch, api_key, session)
             if results is None:
@@ -543,7 +578,8 @@ def stage3_llm_assist(borderline_pairs: list[tuple[dict, dict, float]]) -> list[
                     confirmed.append((a, b, sim))
 
     print(f"[issue_grouper] 3차 LLM 보조 완료 - 애매 구간 {len(borderline_pairs)}쌍 중 "
-          f"{len(confirmed)}쌍 '같은 사건'으로 최종 병합")
+          f"{len(confirmed)}쌍 '같은 사건'으로 최종 병합"
+          + (f" ({skipped_pairs}쌍은 시간 예산 소진으로 미시도)" if skipped_pairs else ""))
     return confirmed
 
 
@@ -551,12 +587,17 @@ def stage3_llm_assist(borderline_pairs: list[tuple[dict, dict, float]]) -> list[
 # 최종 진입점: 1차 + 2차 + 3차를 합쳐서 scorer.py에 바로 넘길 수 있는 형태로 반환
 # ---------------------------------------------------------------------------
 
-def group_issues(articles: list[dict], model=None) -> list[list[dict]]:
+def group_issues(articles: list[dict], model=None, deadline: float | None = None) -> list[list[dict]]:
     """
     1차(사전) + 2차(임베딩) + 3차(LLM 보조)를 순서대로 실행해 최종 이슈 그룹 리스트를 만든다.
 
     이 함수의 반환값은 scorer.score_and_rank()가 받는 입력과 형태가 동일하다.
     (list[list[dict]]) - main.py의 score()가 이 함수를 호출해서 씀.
+
+    deadline: time.monotonic() 기준 절대 마감 시각(main.py의 파이프라인 전역 공유 예산에서
+    계산됨). stage3_llm_assist에 그대로 전달되고, 아래 3차 호출이 두 군데(직접 호출 +
+    _merge_confirmed_components의 extra_confirm 콜백)라 둘 다 같은 deadline을 공유하도록
+    람다로 감싼다. None이면 stage3_llm_assist가 자체 기본값으로 처리한다.
 
     ** 3차 병합 방식 **
     stage2_group의 결과(stage2_grouped 각 그룹 + still_unmatched 각 기사)를 "구성요소(component)"로 보고, stage3_llm_assist가 "같은 사건"으로 확정한 쌍만 이 구성요소들끼리 추가로 union한다 (Union-Find를 구성요소 단위로 한 번 더 적용.
@@ -579,10 +620,12 @@ def group_issues(articles: list[dict], model=None) -> list[list[dict]]:
     confirmed_pairs: list[tuple[dict, dict, float]] = []
     if borderline_pairs:
         print(f"[issue_grouper] 임계값 애매 구간 {len(borderline_pairs)}쌍 발견 - 3차 LLM 보조로 최종 판단")
-        confirmed_pairs = stage3_llm_assist(borderline_pairs)
+        confirmed_pairs = stage3_llm_assist(borderline_pairs, deadline=deadline)
 
     components = stage2_grouped + [[a] for a in still_unmatched]
-    components = _merge_confirmed_components(components, confirmed_pairs, extra_confirm=stage3_llm_assist)
+    components = _merge_confirmed_components(
+        components, confirmed_pairs,
+        extra_confirm=lambda pairs: stage3_llm_assist(pairs, deadline=deadline))
 
     return stage1_grouped + components
 
@@ -865,4 +908,3 @@ def stage4_dedupe_and_promote(ranked_pool: list[dict], top_n: int, label: str = 
         print(f"{prefix}4차 Top N 재검토 완료 - 최종 {len(candidates)}건")
 
     return candidates
-

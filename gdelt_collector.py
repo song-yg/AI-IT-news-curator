@@ -323,16 +323,13 @@ MAX_RECORDS = 250
 # 수집 하나만으로 6시간을 넘길 수 있다(실측: 키워드를 크게 늘려 테스트한
 # 실행에서 외부 재시도 1라운드까지만 4시간 소요).
 #
-# WATT/네이버 수집, 의존성 설치, 임베딩 모델 로드, 스코어링, LLM 요약,
-# 저장/배포, git 커밋·푸시까지 GDELT 이후 단계에도 시간이 필요하므로,
-# GDELT 수집 자체에 6시간을 전부 쓸 수는 없다 - 나머지 단계에 여유를 남기고
-# GDELT에는 5시간(18000초)까지만 예산으로 준다. 이 시간을 넘기면 아직 시도
-# 안 한 키워드는 이번 실행에서 과감히 포기하고, 그때까지 모은 결과만
-# 가지고 다음 단계로 넘어간다("일부 키워드 손실 감수하더라도 전체 파이프
-# 라인은 시간 안에 끝내는 것"을 우선하기로 한 결정) - 포기된 키워드는
-# 다음 실행에서 처음부터 다시 시도되므로(학습형 스킵/크라우딩 목록과
-# 달리 "실패"로 기록되지 않음) 매주 조금씩이라도 커버리지가 쌓인다.
-TIME_BUDGET_SECONDS = 5 * 60 * 60  # 5시간
+# ** main.py의 파이프라인 전역 공유 예산 체계로 전환됨 **
+# 예전엔 이 상수가 "GDELT에게 6시간 중 5시간을 미리 떼어준다"는 의미였지만,
+# 지금은 main.py가 파이프라인 시작 시점에 잡은 절대 마감 시각(deadline)을
+# collect() 호출부에서 넘겨받아 쓰고, 앞 단계(네이버 수집 등)가 시간을 많이
+# 썼으면 이 단계의 실제 여유는 자동으로 줄어든다 - 아래 값은 그 deadline을
+# 못 받았을 때(예: 이 모듈만 따로 테스트)만 쓰는 이 모듈 자체의 기본값이다.
+TIME_BUDGET_SECONDS = 5 * 60 * 60  # 5시간(standalone 기본값 - 정상 실행에선 main.py의 deadline이 우선)
 
 # --- 적응형 배치 수집 ---
 #
@@ -348,23 +345,16 @@ TIME_BUDGET_SECONDS = 5 * 60 * 60  # 5시간
 # 묶음을 나눠서 그냥 돌리기 - 하필 두 인기 키워드가 같은 고정 묶음에
 # 우연히 들어가면 그 조합이 계속 나쁜 채로 반복됨.
 #
-# 채택한 방식: 일단 작게 묶어서(BATCH_SIZE) 보내보고, 그 배치 결과에서
-# 상한(MAX_RECORDS) 근처까지 찼는데 특정 키워드가 결과의 상당 비율을
-# 차지했으면("크라우딩 감지") 그 배치의 나머지 키워드만 그 자리에서
-# 개별로 추가 요청해서 보충한다. 사람이 미리 분류할 필요도 없고, 그
-# 실행에서 실제로 터진 키워드를 즉시 감지해서 대응하므로 "갑자기 뜬
-# 키워드"도 놓치지 않는다 (아래 collect()/_detect_crowded_keywords 참고).
+# 채택한 방식: 일단 작게 묶어서(BATCH_SIZE) 보내보고, 그 배치 결과가
+# 상한(MAX_RECORDS) 근처까지 찼으면("크라우딩 감지") 그 배치 전체를 그
+# 자리에서 개별로 다시 요청해서 보충한다. 배치 안 누가 상한을 차지했는지는
+# 가려내지 않는다 - 상한에 밀린 이상 원인 키워드도 자기 몫이 잘렸을 수
+# 있어서 배치 전체를 다시 개별로 도는 게 맞다고 판단(과거엔 제목 기준
+# 비율로 "원인 키워드"만 가려서 나머지만 개별 재요청했으나, 근사치 판정의
+# 오탐 여지와 원인 키워드 자신도 잘렸을 가능성을 고려해 그 구분을 없앰).
+# 사람이 미리 분류할 필요도 없고, 그 실행에서 실제로 터진 키워드를 즉시
+# 감지해서 대응하므로 "갑자기 뜬 키워드"도 놓치지 않는다 (아래 collect() 참고).
 BATCH_SIZE = 5  # 잠정값 - 실측하면서 조정 (작을수록 크라우딩 적지만 요청 많아짐)
-
-# 배치 결과가 상한(MAX_RECORDS)의 이 비율 이상 찼을 때만 크라우딩 검사를
-# 한다 - 상한에 안 걸렸으면애초에 뭔가 밀려났을 리가 없으므로 검사 자체가
-# 무의미함(불필요한 오탐 방지).
-CROWDING_CAP_TRIGGER_RATIO = 0.9
-
-# 배치 결과 중 한 키워드가(제목 기준 근사치) 이 비율 이상을 차지하면
-# "크라우딩"으로 판단해 나머지 키워드를 개별 재요청한다. 잠정값 - 실측
-# 필요.
-CROWDING_SHARE_THRESHOLD = 0.4
 
 # 키워드 사이 요청 간격.
 # GDELT는 공식적으로 "몇 초에 몇 건"인지 수치를 공개하지 않는다. 경험적으로
@@ -782,36 +772,7 @@ def _collect_articles_individually(gd: "GdeltDoc", keywords: list[str]) -> tuple
     return any_success, all_articles
 
 
-def _detect_crowded_keywords(articles: list[dict], keywords: list[str]) -> list[str]:
-    """
-    배치(OR 결합) 요청 결과에서 특정 키워드가 결과를 과도하게 차지해서, 상한(MAX_RECORDS) 때문에 같은 배치의 다른 키워드가 밀려났을 가능성이 있는지 감지한다.
-
-    반환값: "크라우딩을 일으킨 것으로 보이는" 키워드 리스트. 호출부는 이 리스트에 없는(=밀려났을 가능성이 있는) 나머지 배치 키워드를 개별로 추가 요청해서 보충한다.
-
-    ** 판단 기준 **
-    1. 배치 결과 건수가 MAX_RECORDS의 CROWDING_CAP_TRIGGER_RATIO(90%) 이상이어야 검사 자체를 시작한다.
-      - 상한에 안 걸렸으면 애초에 밀려난 기사가 있을 수 없으므로 검사가 무의미함(오탐 방지).
-    2. 제목 기준 부분 문자열 매칭으로 키워드별 건수를 세고(근사치 - 아래 한계 참고), 배치 전체 대비 비율이 CROWDING_SHARE_THRESHOLD(40%) 이상이면 그 키워드를 크라우딩 원인으로 판단한다.
-
-    ** 한계 (기존 "키워드별 매칭 현황" 로그와 같은 이유) **
-    GDELT는 제목뿐 아니라 본문 전체로 매칭하는데 본문은 안 받아오므로, 이 함수는 "제목에 명시적으로 드러난 크라우딩"만 잡아낸다.
-    - 본문에만 있던 매칭으로 크라우딩이 생겨도 이 함수는 못 잡을 수 있다.
-    (과소 탐지 쪽으로 치우침 - 놓치는 게 있을 수 있지만, 반대로 불필요한 추가 요청을 남발하지는 않는다는 뜻이라 안전한 방향의 편향으로 판단)
-    """
-    total = len(articles)
-    if total < MAX_RECORDS * CROWDING_CAP_TRIGGER_RATIO:
-        return []
-
-    crowders = []
-    for keyword in keywords:
-        keyword_lower = keyword.lower()
-        count = sum(1 for a in articles if keyword_lower in a["title"].lower())
-        if count / total >= CROWDING_SHARE_THRESHOLD:
-            crowders.append(keyword)
-    return crowders
-
-
-def collect(keywords: list[str] | None = None) -> tuple[list[dict], dict]:
+def collect(keywords: list[str] | None = None, deadline: float | None = None) -> tuple[list[dict], dict]:
     """
     KEYWORDS_EN을 대상으로 GDELT에서 기사 메타데이터를 수집한다.
     이 함수가 gdelt_collector의 '진입점'.
@@ -820,6 +781,10 @@ def collect(keywords: list[str] | None = None) -> tuple[list[dict], dict]:
               - 테스트 스크립트에서 키워드 수를 줄여 빠르게 확인해보기 위한 용도.
                 main.py의 정식 실행은 인자 없이 collect()를 호출하므로 기존 동작과 완전히 동일함.
 
+    deadline: time.monotonic() 기준 절대 마감 시각. main.py가 파이프라인 전역 공유 예산에서
+              계산해 넘겨준다 - 안 넘겨받으면(예: 이 모듈만 따로 테스트) 이 모듈 자체 기본값
+              (TIME_BUDGET_SECONDS)으로 지금 시각 기준 마감을 계산한다.
+
     ** 적응형 배치 수집 **
     키워드를 전부 OR로 묶으면 250건 상한을 한 키워드가 독차지하는 문제가 생길 수 있고,
     전부 개별 요청하면 요청 횟수가 키워드 수에 비례해서 늘어난다.
@@ -827,11 +792,11 @@ def collect(keywords: list[str] | None = None) -> tuple[list[dict], dict]:
 
       1단계: 활성 키워드를 BATCH_SIZE(기본 5)개씩 묶어 각 배치를 OR로 결합해 요청(_collect_articles_for_keywords 재사용)
              - 배치가 많아도 요청 횟수는 "키워드 수 / BATCH_SIZE"로 완만하게 늘어남.
-      2단계: 각 배치 결과에 _detect_crowded_keywords를 적용해,
-             상한 (MAX_RECORDS) 근처까지 찼는데 특정 키워드가 결과의 상당
-             비율(CROWDING_SHARE_THRESHOLD)을 차지했으면 "크라우딩"으로
-             판단하고, 그 배치의 **나머지** 키워드만 개별 재요청 대상으로
-             남겨둔다.
+      2단계: 각 배치 결과가 정확히 상한(MAX_RECORDS, 250건)에 도달했으면("근처"가
+             아니라 딱 도달했을 때만) "크라우딩"으로 판단하고, 원인 키워드를
+             가려내지 않고 그 배치 **전체**를 개별 재요청 대상으로 남겨둔다 -
+             상한에 밀린 이상 배치 안 어떤 키워드든 자기 몫이 잘렸을 수 있어서
+             전부 다시 확인한다.
       3단계: 배치 자체가 실패한 경우(429 등)는 **같은 배치로** 외부 재시도
              라운드(OUTER_RETRY_PASSES)를 돈다. 크라우딩으로 밀려난
              키워드(진짜 "상한 초과"류 문제)만 개별 재요청 대상으로 모아
@@ -882,12 +847,12 @@ def collect(keywords: list[str] | None = None) -> tuple[list[dict], dict]:
         return all_articles, timeline_by_keyword
 
     # --- 시간 예산 추적 시작 ---
-    collect_start = time.monotonic()
+    effective_deadline = deadline if deadline is not None else time.monotonic() + TIME_BUDGET_SECONDS
     budget_exceeded = False
     skipped_due_to_budget: list[str] = []
 
     def _over_budget() -> bool:
-        return (time.monotonic() - collect_start) >= TIME_BUDGET_SECONDS
+        return time.monotonic() >= effective_deadline
 
     # --- 1단계: 배치 단위 수집 + 크라우딩 감지 ---
     batches = [active_keywords[i:i + BATCH_SIZE] for i in range(0, len(active_keywords), BATCH_SIZE)]
@@ -899,7 +864,7 @@ def collect(keywords: list[str] | None = None) -> tuple[list[dict], dict]:
             remaining = [kw for b in batches[batch_idx:] for kw in b]
             skipped_due_to_budget.extend(remaining)
             budget_exceeded = True
-            print(f"[gdelt] 🟡 주의 - 시간 예산({TIME_BUDGET_SECONDS // 3600}시간) 소진 - "
+            print(f"[gdelt] 🟡 주의 - 시간 예산 소진(전역 파이프라인 마감 도달) - "
                   f"남은 배치 {len(batches) - batch_idx}개(키워드 {len(remaining)}개)는 "
                   f"이번 실행에서 건너뜀. 다음 실행에서 다시 시도됨.")
             break
@@ -920,19 +885,16 @@ def collect(keywords: list[str] | None = None) -> tuple[list[dict], dict]:
             pending_batches.append(batch)
         else:
             all_articles.extend(batch_articles)
-            crowders = _detect_crowded_keywords(batch_articles, batch)
-            if crowders:
-                others = [kw for kw in batch if kw not in crowders]
-                print(f"[gdelt] 배치 {batch} 내 크라우딩 감지({crowders}가 결과의 "
-                      f"{int(CROWDING_SHARE_THRESHOLD * 100)}% 이상 차지 추정) - "
-                      f"나머지 키워드 {others} 개별 재요청으로 보충 예정")
-                pending_individual.extend(others)
-            elif len(batch_articles) >= MAX_RECORDS * CROWDING_CAP_TRIGGER_RATIO:
-                # 특정 키워드 하나가 독차지한 건 아니지만(그래서 _detect_crowded_keywords는 아무도 못 잡음), 배치 결과가 상한 근처까지 찼다는 사실 자체는 여전히 위험 신호다.
-                #  - 여러 키워드가 "골고루" 상한에 밀려서 다들 조금씩 손실을 봤을 수 있는데, 이 경우 제목 기준 근사치 비율로는 아무도 40%(CROWDING_SHARE_THRESHOLD)를 못 넘어서 단순 비율 판정만으로는 "크라우딩 없음"으로 오판할 수 있다.
-                # 특정 원인 키워드를 지목할 수 없으므로, 안전하게 배치 전체를 개별 재요청 대상으로 보충한다.
-                print(f"[gdelt] 배치 {batch} 결과가 상한 근처까지 참({len(batch_articles)}건) - "
-                      f"골고루 밀렸을 위험 있어 배치 전체 개별 재요청으로 보충 예정")
+            if len(batch_articles) >= MAX_RECORDS:
+                # 배치 결과가 정확히 상한(250건)에 도달했다 - "근처(예: 90%)"처럼 어중간한
+                # 기준을 쓰지 않는다. 상한 미만이면 실제로 그 배치의 매칭 결과가 그만큼뿐이었다는
+                # 뜻이라 밀려난 게 없고, 정확히 상한에 도달했을 때만 "더 있었는데 잘렸을 가능성"이
+                # 생기므로 그 경우만 크라우딩으로 본다.
+                # 원인 키워드를 가려내려 하지 않는다 - 상한에 밀린 이상 배치 안 어떤 키워드든
+                # (제목 기준 비율이 낮게 잡힌 키워드 포함) 자기 몫이 잘렸을 수 있어서, 배치 전체를
+                # 무조건 개별 재요청 대상으로 보충한다.
+                print(f"[gdelt] 배치 {batch} 결과가 상한({MAX_RECORDS}건)에 도달함 - "
+                      f"배치 전체 개별 재요청으로 보충 예정")
                 pending_individual.extend(batch)
         time.sleep(REQUEST_INTERVAL)
 
@@ -980,12 +942,9 @@ def collect(keywords: list[str] | None = None) -> tuple[list[dict], dict]:
             success, batch_articles = _collect_articles_for_keywords(gd, batch)
             if success:
                 all_articles.extend(batch_articles)
-                # 재시도로 살아난 배치도 똑같이 크라우딩 체크 (일관성 유지)
-                crowders = _detect_crowded_keywords(batch_articles, batch)
-                if crowders:
-                    others = [kw for kw in batch if kw not in crowders]
-                    pending_individual.extend(others)
-                elif len(batch_articles) >= MAX_RECORDS * CROWDING_CAP_TRIGGER_RATIO:
+                # 재시도로 살아난 배치도 똑같이 정확히 상한 도달 여부만 체크(일관성 유지) - 1단계와
+                # 동일하게 원인 키워드를 가려내지 않고 상한 도달이면 배치 전체를 개별 재요청 대상으로 보충
+                if len(batch_articles) >= MAX_RECORDS:
                     pending_individual.extend(batch)
             else:
                 still_failed_batches.append(batch)
@@ -1042,8 +1001,8 @@ def collect(keywords: list[str] | None = None) -> tuple[list[dict], dict]:
             if success:
                 all_articles.extend(keyword_articles)
                 failure_reasons.pop(keyword, None)  # 재시도로 살아났으면 이전 실패 기록 제거
-                if len(keyword_articles) >= MAX_RECORDS * CROWDING_CAP_TRIGGER_RATIO:
-                    # 이 키워드를 "혼자" 요청했는데도 결과가 상한 근처
+                if len(keyword_articles) >= MAX_RECORDS:
+                    # 이 키워드를 "혼자" 요청했는데도 결과가 정확히 상한에 도달
                     # - 원래 건수가 많은 키워드라는 뜻이라, 다음 실행부터 배치를 거치지 않도록 학습 대상으로 기록해둔다.
                     _crowded_keywords_this_run.append(keyword)
             else:

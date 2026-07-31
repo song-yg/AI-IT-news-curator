@@ -19,6 +19,7 @@ AI·IT 뉴스 큐레이션 시스템의 오케스트레이션 레이어.
 """
 
 import os
+import time
 from collections import defaultdict
 from datetime import datetime, timezone
 
@@ -39,17 +40,44 @@ import deploy
 TOP_N = int(os.environ.get("TOP_N") or 5)
 CATEGORY_TOP_N = int(os.environ.get("CATEGORY_TOP_N") or 1)
 
+# --- 파이프라인 전역 공유 시간예산 ---
+#
+# GDELT 수집(gdelt_collector), 관련성 필터/카테고리 재분류(relevance_filter), 3차 이슈
+# 그룹핑 LLM 보조(issue_grouper) 네 곳이 전부 자기만의 시간예산(TIME_BUDGET_SECONDS 등)을
+# 따로 갖고 있었는데, 그건 서로 독립적인 "최대치"일 뿐이라 넷 다 최악의 경우를 동시에
+# 찍으면 GitHub Actions 잡 하드 캡(360분)을 훌쩍 넘겨버리는 문제가 있었다(각자 5시간+
+# 120분+90분+45분 = 555분).
+#
+# 그래서 main.py가 파이프라인 시작 시점에 절대 마감 시각(deadline, time.monotonic() 기준)을
+# 한 번만 계산해서 위 네 단계 호출부에 전부 그대로 넘겨준다 - 앞 단계가 시간을 많이 썼으면
+# 뒷 단계가 실제로 쓸 수 있는 여유는 자동으로 줄어들고(더해서 재조정할 필요 없음), 앞
+# 단계가 일찍 끝나면 그만큼 뒷 단계에 자연히 남는다. 각 모듈의 TIME_BUDGET_SECONDS 상수는
+# 이제 이 deadline을 못 받았을 때(standalone 테스트 등)만 쓰는 모듈 자체 기본값으로 격하됨.
+#
+# 300분(5시간)으로 잡은 근거: GitHub Actions 잡 하드 캡 360분에서, 이 예산 추적 범위 밖에
+# 있는 단계들 몫으로 최소 60분을 남겨둔다 - 체크아웃/디스크 정리/Python·의존성 설치/BGE-M3
+# 캐시(위 네 단계 시작 *전*), 네이버 수집(예산 없음, 다만 재시도 루프가 없어 위험 낮음),
+# 임베딩 1차/2차(로컬 CPU라 짧음), 4차 Top N 사후 재검토·LLM 요약 두 번(둘 다 아직 시간예산
+# 없음 - TOP_N이 고정값이라 수집량과 무관하게 규모가 안 커져서 상대적으로 안전), 저장/배포/
+# git 커밋·푸시(위 단계 이후).
+PIPELINE_TIME_BUDGET_SECONDS = 300 * 60  # 300분(5시간)
+
+
 
 # ---------------------------------------------------------------------------
 # 1) 수집 레이어
 # ---------------------------------------------------------------------------
 
-def run_collectors() -> tuple[list[dict], dict, list[str]]:
+def run_collectors(deadline: float | None = None) -> tuple[list[dict], dict, list[str]]:
     """
     naver/gdelt collector를 순서대로 실행.
 
     각 collector를 개별 try/except로 감싸서, 하나가 통째로 실패해도(import 실패 등) 나머지는
     계속 진행한다 - collector 내부의 세밀한 방어와 별개로, 모듈 자체가 죽는 경우의 마지막 방어선.
+
+    deadline: 파이프라인 전역 공유 예산의 절대 마감 시각. gdelt_collector.collect()에 그대로
+    전달한다. 네이버 수집은 재시도 루프가 없어 시간예산 메커니즘 자체가 없으므로 이 값을 안 씀
+    (naver_collector.collect()는 인자 없이 그대로 호출).
 
     반환값: all_articles(두 collector 결과 합친 리스트, 공통 스키마라 합치기만 하면 됨),
             gdelt_timeline(참고 지표, scored.json에 그대로 저장), failed_sources(실패 소스명)
@@ -67,7 +95,7 @@ def run_collectors() -> tuple[list[dict], dict, list[str]]:
         failed_sources.append("네이버")
 
     try:
-        gdelt_articles, gdelt_timeline = gdelt_collector.collect()
+        gdelt_articles, gdelt_timeline = gdelt_collector.collect(deadline=deadline)
         all_articles.extend(gdelt_articles)
         print(f"[main] GDELT 수집 완료 - {len(gdelt_articles)}건")
     except Exception as e:
@@ -107,7 +135,8 @@ def normalize(articles: list[dict]) -> list[dict]:
 # 3) 스코어링 - scorer.py 그대로 사용
 # ---------------------------------------------------------------------------
 
-def score(articles: list[dict], model, top_n: int = TOP_N) -> tuple[list[dict], list[dict], dict, dict]:
+def score(articles: list[dict], model, top_n: int = TOP_N,
+          deadline: float | None = None) -> tuple[list[dict], list[dict], dict, dict]:
     """
     이슈 그룹핑(issue_grouper.group_issues) + 국내/해외 개별 랭킹(Top N) 수행.
 
@@ -128,6 +157,9 @@ def score(articles: list[dict], model, top_n: int = TOP_N) -> tuple[list[dict], 
 
     model: SentenceTransformer 인스턴스 또는 None (None이면 issue_grouper가 1차 결과만으로 fallback).
 
+    deadline: 파이프라인 전역 공유 예산의 절대 마감 시각. issue_grouper.group_issues()(그 안의
+    3차 LLM 보조)에 그대로 전달한다.
+
     카테고리별 Top N도 함께 계산해서 반환 - 국내/해외 각 축 안에서 scorer.score_by_category()로
     (최대 카테고리 9개 x 국내/해외 2개 = 최대 18개 리스트). N값은 CATEGORY_TOP_N으로 조정.
 
@@ -137,7 +169,7 @@ def score(articles: list[dict], model, top_n: int = TOP_N) -> tuple[list[dict], 
     같은 사건인지 LLM으로 한 번 더 확인 후 병합하고 빈 자리는 다음 순위로 채운다.
     카테고리별은 scorer.score_by_category의 dedupe_fn 콜백으로 연결한다.
     """
-    groups = issue_grouper.group_issues(articles, model=model)
+    groups = issue_grouper.group_issues(articles, model=model, deadline=deadline)
 
     domestic_groups = []
     international_groups = []
@@ -254,8 +286,12 @@ def step4_llm_summary(domestic_ranked: list[dict],
 # ---------------------------------------------------------------------------
 
 def run() -> None:
+    # 파이프라인 전역 공유 예산 - 이 시점 기준 절대 마감 시각을 한 번만 계산해서
+    # 아래 GDELT 수집/관련성 필터/카테고리 재분류/이슈 그룹핑 3차 LLM 보조에 그대로 넘긴다.
+    pipeline_deadline = time.monotonic() + PIPELINE_TIME_BUDGET_SECONDS
+
     print("=== [1] 수집 시작 ===")
-    articles, gdelt_timeline, failed_sources = run_collectors()
+    articles, gdelt_timeline, failed_sources = run_collectors(deadline=pipeline_deadline)
 
     print("\n=== [2] 정규화 ===")
     # 이 단계부터 [4-보조]까지 각 단계를 안전망으로 감싼다.
@@ -271,7 +307,7 @@ def run() -> None:
     print("\n=== [2.5] 관련성 필터 ===")
     # 키워드 매칭만으로 못 거르는 오매칭(동음이의어, 각주성 언급 등)을 LLM이 맥락으로 판단해 필터링
     try:
-        articles = relevance_filter.filter_articles(articles)
+        articles = relevance_filter.filter_articles(articles, deadline=pipeline_deadline)
     except Exception as e:
         print(f"[main] 🔴 조치필요 [MN-06] - [2.5] 관련성 필터 단계에서 예상 못 한 오류 발생 - 필터링 없이 다음 단계로 진행: "
               f"{type(e).__name__} - {e!r}")
@@ -280,7 +316,7 @@ def run() -> None:
     # keyword_tagger(사전 매칭)와 relevance_filter(LLM 판단)의 기준이 달라서, 사전엔 안 걸려 "기타"로 붙었는데
     # relevance_filter는 "관련 있음"으로 확정하는 기사가 생길 수 있다 - 이런 기사만 다시 LLM에 물어 재분류.
     try:
-        articles = relevance_filter.recategorize_uncategorized(articles)
+        articles = relevance_filter.recategorize_uncategorized(articles, deadline=pipeline_deadline)
     except Exception as e:
         print(f"[main] 🔴 조치필요 [MN-07] - [2.6] 카테고리 재분류 단계에서 예상 못 한 오류 발생 - 재분류 없이 다음 단계로 진행: "
               f"{type(e).__name__} - {e!r}")
@@ -291,7 +327,8 @@ def run() -> None:
     print("\n=== [3] 스코어링 ===")
     try:
         (domestic_ranked, international_ranked,
-         domestic_category_ranked, international_category_ranked) = score(articles, embedding_model, top_n=TOP_N)
+         domestic_category_ranked, international_category_ranked) = score(
+            articles, embedding_model, top_n=TOP_N, deadline=pipeline_deadline)
         scorer.print_top_n("국내", domestic_ranked, n=TOP_N)
         scorer.print_top_n("해외", international_ranked, n=TOP_N)
         scorer.print_category_top_n("국내", domestic_category_ranked, n=CATEGORY_TOP_N)

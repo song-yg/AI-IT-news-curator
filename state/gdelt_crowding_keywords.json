@@ -3,11 +3,11 @@
     "crowd_count": 2,
     "last_seen": "2026-07-30T07:58:03.249574+00:00"
   },
-  "LLM": {
+  "nvidia": {
     "crowd_count": 2,
     "last_seen": "2026-07-30T07:58:03.249574+00:00"
   },
-  "nvidia": {
+  "claude": {
     "crowd_count": 2,
     "last_seen": "2026-07-30T07:58:03.249574+00:00"
   }
