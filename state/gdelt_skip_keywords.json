@@ -1,1 +1,7 @@
-{}
+{
+  "AI": {
+    "fail_count": 2,
+    "reason": "GDELT API가 'phrase too short' 등으로 쿼리 자체를 거부함 (자동 학습됨)",
+    "last_seen": "2026-07-27T05:10:22.377382+00:00"
+  }
+}
