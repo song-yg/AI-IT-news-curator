@@ -117,7 +117,7 @@ def score_and_rank(groups: list[list[dict]], top_n: int | None = None,
                     reference: datetime | None = None) -> list[dict]:
     """
     이슈 그룹 리스트를 스코어링하고 issue_score 내림차순 정렬.
-    top_n 지정 시 상위 N개만 반환(main.py에서 LLM 요약 호출 전 top_n=5로 넘기면 "주간 Top 5" 운영이 됨).
+    top_n 지정 시 상위 N개만 반환(main.py에서 LLM 요약 호출 전 top_n=5로 넘기면 "일간 Top 5" 운영이 됨).
 
     각 축(국내/해외)의 원본 issue_score를 그대로 비교 - 정규화나 통합 종합 랭킹은 만들지 않음.
     (이 함수는 이미 한 축으로 분리된 groups만 받는다는 전제, 호출부가 국내/해외 각각 호출)

@@ -6,7 +6,8 @@
 #   1. workflow_dispatch(수동 버튼) - 테스트/임시 확인용.
 #      실행 시 memo를 입력하면 Actions 목록 화면의 실행 이름과 실행 상세 페이지 요약에 바로 남아서,
 #      나중에 "이 회차가 뭘 확인하려던 실행이었는지" 코드를 안 열어봐도 바로 알 수 있다.
-#   2. schedule(매주 월요일 자동) - 실제 "이번 주 정식 큐레이션"은 이걸로.
+#   2. schedule(매일 새벽 자동) - 실제 "오늘 정식 큐레이션"은 이걸로. 전날(DAYS_BACK=1)
+#      기사를 수집해서 발송한다(예전엔 주 1회 실행 + 7일치 수집이었음 - 일간 전환).
 #      on: push는 의도적으로 안 씀 - 이 파이프라인은 실행될 때마다 실제 이메일 발송 + LLM 호출량(일일 한도 있는 프로바이더 포함) 소모 + 데이터 커밋이 일어나서,
 #      단순 코드 수정 커밋마다 전체가 돌아버리면 테스트/실제 실행이 뒤섞이는 문제가 생김.
 #
@@ -22,7 +23,7 @@ run-name: "회차 #${{ github.run_number }}: ${{ inputs.memo || '자동 스케�
 
 permissions:
   contents: write  
-  # 저장 레이어(5단계) 결과물(data/YYYY-WW/)을 리포에 커밋/푸시하려면 필요.
+  # 저장 레이어(5단계) 결과물(data/YYYY-MM-DD/)을 리포에 커밋/푸시하려면 필요.
   # 기본 GITHUB_TOKEN은 리포 설정에 따라 read-only일 수 있어 명시적으로 write 권한을 준다.
 
 on:
@@ -33,8 +34,11 @@ on:
         required: false
         default: '수동 실행 메모 없음'
   schedule:
-    # 매주 월요일 00:00 UTC(한국 시간 09:00) - cron은 UTC 기준
-    - cron: "0 0 * * 1"
+    # 매일 새벽 4시 KST(전날 19:00 UTC) - cron은 UTC 기준
+    # (예전엔 "매주 월요일 00:00 UTC"였음 - 일간 전환하면서 변경. 새벽 시간대로 잡은 이유:
+    # 전날 하루치 뉴스가 대부분 마감된 뒤에 돌아야 "전날 기사"라는 취지에 맞고, 업무 시간과
+    # 안 겹쳐서 GDELT 429 등 외부 API 혼잡도도 상대적으로 낮을 걸로 기대)
+    - cron: "0 19 * * *"
 
 concurrency:
   # group을 workflow 이름으로 고정해서, 같은 workflow가 이미 돌고 있으면 새 실행이 그걸 기다리지 않고 취소하도록 함 (cancel-in-progress: true)
@@ -144,7 +148,7 @@ jobs:
         # THRESHOLD/BORDERLINE_MARGIN을 눈으로 보고 직접 조정.
         # issue_grouper.export_similarity_scores()가 만든 similarity_debug/similarity_scores.csv를 GitHub Actions 아티팩트로 업로드한다.
         # raw.json/scored.json/summary.md와 달리 data/ 아래 git commit은 안 함
-        # - 이건 매주 쌓아둘 "공식 산출물"이 아니라 임계값 튜닝이 끝나면 더 이상 필요 없는 일회성 진단용 파일이라, 리포 히스토리를 불필요하게 늘리지 않으려고 Actions 아티팩트(보존 기간 지나면 자동 삭제)로만 남김.
+        # - 이건 매일 쌓아둘 "공식 산출물"이 아니라 임계값 튜닝이 끝나면 더 이상 필요 없는 일회성 진단용 파일이라, 리포 히스토리를 불필요하게 늘리지 않으려고 Actions 아티팩트(보존 기간 지나면 자동 삭제)로만 남김.
         # if-no-files-found: warn - main.py가 도중에 실패해서 이 파일 자체가 안 만들어졌을 수 있는데, 그런 경우에도 아티팩트 업로드 실패로 워크플로 전체가 실패 처리되면 안 되므로 경고만 남기고 넘어가게 함.
         if: always()
         uses: actions/upload-artifact@v4
@@ -155,18 +159,18 @@ jobs:
           retention-days: 14
 
       - name: 저장 결과물(data/, state/) 커밋 & 푸시
-        # storage.py가 data/YYYY-WW/에 raw.json/scored.json/summary.md를 만들어도, 이 스텝이 없으면 GitHub-hosted 러너가 실행 끝나고 통째로 폐기되면서 파일도 같이 사라진다.
+        # storage.py가 data/YYYY-MM-DD/에 raw.json/scored.json/summary.md를 만들어도, 이 스텝이 없으면 GitHub-hosted 러너가 실행 끝나고 통째로 폐기되면서 파일도 같이 사라진다.
         # (러너는 매번 완전히 새 VM - "8. GitHub Actions 유의사항" 참고).
-        # data/ 폴더를 "이번 주 결과물 아카이브"이자 "다음 주 지난주 대비 증감 비교의 재료"로 쓰려면 반드시 리포에 커밋까지 해야 함.
+        # data/ 폴더를 "오늘 결과물 아카이브"이자 "다음 날 전일/7일 평균 대비 증감 비교의 재료"로 쓰려면 반드시 리포에 커밋까지 해야 함.
         # state/gdelt_skip_keywords.json(학습형 스킵 목록, gdelt_collector.py 참고)도 같은 이유로 커밋 대상에 추가 
-        # - data/와 성격은 다르지만(주차 무관, 계속 누적) 마찬가지로 다음 실행에 이어지려면 리포에 남아있어야 함.
+        # - data/와 성격은 다르지만(날짜 무관, 계속 누적) 마찬가지로 다음 실행에 이어지려면 리포에 남아있어야 함.
         # 변경 사항이 없으면(예: main.py가 도중에 실패해 data/ 갱신이 없는 경우) commit이 빈 커밋이 되지 않도록 diff 확인 후 조건부로 실행.
         #
         # push가 "! [rejected] main -> main (fetch first)"로 실패하는 사고 실측 확인.
         # - 체크아웃(job 시작 시점) 이후 원격 main에 이 job이 모르는 새 커밋이 생겨서(예: 같은 파이프라인을 겹쳐 실행) non-fast-forward로 거부됨.
         # 이 파이프라인은 GDELT 429 백오프 때문에 체크아웃부터 push까지 최대 몇 시간씩 걸릴 수 있어 (job 전체 timeout-minutes: 360), 그 사이 원격이 앞서갈 여지가 충분함.
         # push 직전에 git pull --rebase로 원격 변경사항을 먼저 반영해서 최신 위에 이 커밋을 얹도록 수정.
-        # rebase 자체가 충돌나면 (예: 같은 주차 파일을 동시에 건드린 경우) 사람이 봐야 하므로 자동 해결은 시도하지 않고 그대로 실패시킨다.
+        # rebase 자체가 충돌나면 (예: 같은 날짜 파일을 동시에 건드린 경우) 사람이 봐야 하므로 자동 해결은 시도하지 않고 그대로 실패시킨다.
         # `[ -d data/ ] && git add data/` 방식도 이 workflow가 `bash -e`로 도는 이상 같은 함정이 남아있음
         # - `cmd1 && cmd2`를 단독 문장으로 쓰면, cmd1(`[ -d data/ ]`)이 실패했을 때 그 실패가 그대로 전체 목록의 실패로 취급돼 `set -e`가 스크립트를 즉시 중단시킴.
         # (`if` 조건절 안에서 실패하는 것과 달리, `&&`/`||` 목록은 set -e의 예외 대상이 아님).
@@ -183,7 +187,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "data/, state/ 변경 사항 없음 - 커밋 생략"
           else
-            git commit -m "chore: 사료축산뉴스 큐레이션 결과 저장 ($(date -u +%Y-%m-%d))"
+            git commit -m "chore: AI·IT 뉴스 큐레이션 결과 저장 ($(date -u +%Y-%m-%d))"
             git pull --rebase origin main
             git push
           fi

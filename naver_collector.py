@@ -17,10 +17,11 @@ import keyword_source
 # .env 파일이 있으면 환경변수로 등록 (없어도 에러 없음 - GitHub Actions는 Secrets가 이미 주입돼 있어 무시됨)
 load_dotenv()
 
-NAVER_API_URL = "https://naverapihub.apigw.ntruss.com/search/v1/news"
+NAVER_API_URL = "https://openapi.naver.com/v1/search/news.json"
 
-# 주 1회 실행이므로 최근 7일 이내 기사만 남긴다.
-DAYS_BACK = 7
+# 매일 새벽 실행이므로 전날(최근 1일) 이내 기사만 남긴다.
+# (예전엔 주 1회 실행이라 7일이었음 - 일간 전환하면서 변경)
+DAYS_BACK = 1
 
 # fallback 키워드. 구글 시트(KEYWORD_SHEET_CSV_URL)가 있으면 그쪽 우선, 없거나 실패 시 이 리스트 사용.
 # 시트가 바뀌면 이것도 수동으로 같이 갱신해야 함 (자동 동기화 아님).
@@ -115,9 +116,9 @@ def search_naver_news(keyword: str, client_id: str, client_secret: str, start: i
     (세션 재사용은 순전히 성능 최적화, 없어도 기능은 동일)
     """
     headers = {
-        "X-NCP-APIGW-API-KEY-ID": client_id,
-        "X-NCP-APIGW-API-KEY": client_secret,
-        }
+        "X-Naver-Client-Id": client_id,
+        "X-Naver-Client-Secret": client_secret,
+    }
 
     params = {
         "query": keyword,

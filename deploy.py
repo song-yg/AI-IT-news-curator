@@ -1,7 +1,7 @@
 """
 deploy.py - 6단계 배포 레이어.
 
-Gmail SMTP로 이번 주 큐레이션 결과를 HTML 이메일로 발송. main.py의 [6]에서 send_weekly_email() 호출.
+Gmail SMTP로 오늘 큐레이션 결과를 HTML 이메일로 발송. main.py의 [6]에서 send_daily_email() 호출.
 
 ** 인증정보 **
 GitHub Secrets에서 읽음: SMTP_USER(발신 Gmail), SMTP_APP_PASSWORD(앱 비밀번호), EMAIL_RECIPIENTS(콤마 구분 수신자).
@@ -45,25 +45,22 @@ def _escape(value) -> str:
     return html.escape(str(value))
 
 
-def _humanize_week_label(week_label: str) -> str:
+def _humanize_day_label(day_label: str) -> str:
     """
-    week_label(ISO 연도-주차, "2026-31")을 "2026년 7월 5주차"처럼 사람이 읽기 편한 형식으로 변환.
+    day_label(YYYY-MM-DD, "2026-07-31")을 "2026년 7월 31일"처럼 사람이 읽기 편한 형식으로 변환.
       - 헤더/제목 표시용, 저장/비교에는 안 쓰임.
+      (예전엔 ISO 연도-주차를 "n월 n주차"로 변환하는 _humanize_week_label이었음 - 일간 전환하면서 교체)
 
-    ISO 주차의 월요일 날짜를 구해서 그 달 1일부터 7일 단위로 끊은 몇 번째 구간인지 계산((day-1)//7+1)
-      - 달력 주(일~토)와는 다른 단순 정의라 별도 라이브러리 없이 결정적으로 계산 가능.
-    변환 실패 시 원본 week_label 그대로 반환 (표시 형식 하나 때문에 발송 전체가 막히면 안 됨).
+    변환 실패 시 원본 day_label 그대로 반환 (표시 형식 하나 때문에 발송 전체가 막히면 안 됨).
     """
     try:
-        year_str, week_str = week_label.split("-")
-        monday = date.fromisocalendar(int(year_str), int(week_str), 1)
-    except (ValueError, TypeError, IndexError) as e:
-        print(f"[deploy] 🟡 주의 [DP-05] - week_label 형식 변환 실패({week_label!r}) - "
+        day = date.fromisoformat(day_label)
+    except (ValueError, TypeError) as e:
+        print(f"[deploy] 🟡 주의 [DP-05] - day_label 형식 변환 실패({day_label!r}) - "
               f"원본 그대로 사용: {type(e).__name__} - {e!r}")
-        return week_label
+        return day_label
 
-    week_of_month = (monday.day - 1) // 7 + 1
-    return f"{monday.year}년 {monday.month}월 {week_of_month}주차"
+    return f"{day.year}년 {day.month}월 {day.day}일"
 
 
 def _format_issue_html(item: dict, rank: int | None = None, accent: str = DOMESTIC_ACCENT) -> str:
@@ -149,29 +146,54 @@ def _format_category_html(label: str, by_category: dict[str, list[dict]],
 
 
 def _format_category_comparison_axis_html(axis_data: dict[str, dict] | None, accent: str) -> str:
-    """카테고리별 지난주 대비 증감 표(축 하나 분량). 2단 레이아웃에서 좌우 배치용."""
+    """
+    카테고리별 전일 대비 + 7일 평균 대비 증감 표(축 하나 분량). 2단 레이아웃에서 좌우 배치용.
+    axis_data는 category_aggregator.compare_with_history()의 축 하나 분량
+    ({카테고리: {"today","yesterday","delta_yesterday","avg_7day","delta_avg7day"}}).
+    yesterday/avg_7day가 카테고리별로 None일 수 있음(예: 일간 전환 이틀째라 7일 평균 재료 부족)
+    - 그 경우 해당 칸에 "-" 표시.
+    """
     if not axis_data:
-        return '<p style="font-size:13px; color:#999; margin:4px 0;">(비교할 지난주 데이터 없음)</p>'
+        return '<p style="font-size:13px; color:#999; margin:4px 0;">(비교할 과거 데이터 없음)</p>'
     rows = []
     for category, values in axis_data.items():
-        delta = values["delta"]
-        sign = "+" if delta >= 0 else ""
-        color = "#1a7f37" if delta > 0 else ("#c0392b" if delta < 0 else "#888")
+        if values["delta_yesterday"] is not None:
+            dy = values["delta_yesterday"]
+            sign_y = "+" if dy >= 0 else ""
+            color_y = "#1a7f37" if dy > 0 else ("#c0392b" if dy < 0 else "#888")
+            yesterday_cell = f'{values["yesterday"]}건'
+            delta_y_cell = f'<span style="color:{color_y}; font-weight:bold;">{sign_y}{dy}</span>'
+        else:
+            yesterday_cell = "-"
+            delta_y_cell = "-"
+        if values["delta_avg7day"] is not None:
+            da = values["delta_avg7day"]
+            sign_a = "+" if da >= 0 else ""
+            color_a = "#1a7f37" if da > 0 else ("#c0392b" if da < 0 else "#888")
+            avg_cell = f'{values["avg_7day"]}건'
+            delta_a_cell = f'<span style="color:{color_a}; font-weight:bold;">{sign_a}{da}</span>'
+        else:
+            avg_cell = "-"
+            delta_a_cell = "-"
         rows.append(
             '<tr>'
             f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px;">{_escape(category)}</td>'
-            f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px; text-align:right;">{values["this_week"]}건</td>'
-            f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px; text-align:right; color:#999;">{values["last_week"]}건</td>'
-            f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px; text-align:right; color:{color}; font-weight:bold;">{sign}{delta}</td>'
+            f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px; text-align:right;">{values["today"]}건</td>'
+            f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px; text-align:right; color:#999;">{yesterday_cell}</td>'
+            f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px; text-align:right;">{delta_y_cell}</td>'
+            f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px; text-align:right; color:#999;">{avg_cell}</td>'
+            f'<td style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:13px; text-align:right;">{delta_a_cell}</td>'
             '</tr>'
         )
     return (
         '<table style="width:100%; border-collapse:collapse;">'
         '<tr style="background:#fafafa;">'
         '<th style="text-align:left; padding:6px 8px; font-size:11px; color:#888;">카테고리</th>'
-        '<th style="text-align:right; padding:6px 8px; font-size:11px; color:#888;">이번 주</th>'
-        '<th style="text-align:right; padding:6px 8px; font-size:11px; color:#888;">지난주</th>'
-        '<th style="text-align:right; padding:6px 8px; font-size:11px; color:#888;">증감</th>'
+        '<th style="text-align:right; padding:6px 8px; font-size:11px; color:#888;">오늘</th>'
+        '<th style="text-align:right; padding:6px 8px; font-size:11px; color:#888;">전일</th>'
+        '<th style="text-align:right; padding:6px 8px; font-size:11px; color:#888;">전일比</th>'
+        '<th style="text-align:right; padding:6px 8px; font-size:11px; color:#888;">7일평균</th>'
+        '<th style="text-align:right; padding:6px 8px; font-size:11px; color:#888;">평균比</th>'
         '</tr>'
         + "".join(rows) +
         '</table>'
@@ -190,7 +212,7 @@ def _two_column_table(left_html: str, right_html: str) -> str:
     """
 
 
-def render_email_html(week_label: str, domestic_summarized: list[dict], international_summarized: list[dict],
+def render_email_html(day_label: str, domestic_summarized: list[dict], international_summarized: list[dict],
                        domestic_by_category: dict[str, list[dict]],
                        international_by_category: dict[str, list[dict]],
                        failed_sources: list[str],
@@ -203,7 +225,7 @@ def render_email_html(week_label: str, domestic_summarized: list[dict], internat
     <div style="background:{HEADER_BG}; padding:26px 32px; border-radius:10px 10px 0 0;">
       <p style="margin:0; font-size:11px; letter-spacing:2px; color:#9fc0ff; font-weight:bold;">NEWSLETTER</p>
       <h1 style="margin:6px 0 0 0; font-size:22px; color:#fff; font-weight:bold;">AI·IT 뉴스 큐레이션</h1>
-      <p style="margin:5px 0 0 0; font-size:13px; color:#c9dcff;">{_escape(_humanize_week_label(week_label))}</p>
+      <p style="margin:5px 0 0 0; font-size:13px; color:#c9dcff;">{_escape(_humanize_day_label(day_label))}</p>
     </div>
     """
 
@@ -219,13 +241,13 @@ def render_email_html(week_label: str, domestic_summarized: list[dict], internat
     ]
 
     if category_comparison:
-        parts.append(section_header("카테고리별 지난주 대비 증감"))
+        parts.append(section_header("카테고리별 전일·7일 평균 대비 증감"))
         parts.append(_two_column_table(
             _format_category_comparison_axis_html(category_comparison.get("국내"), DOMESTIC_ACCENT),
             _format_category_comparison_axis_html(category_comparison.get("해외"), INTERNATIONAL_ACCENT),
         ))
 
-    parts.append(section_header("주간 Top 이슈"))
+    parts.append(section_header("오늘의 Top 이슈"))
     parts.append(_two_column_table(
         _format_section_html("국내", domestic_summarized, accent=DOMESTIC_ACCENT),
         _format_section_html("해외", international_summarized, accent=INTERNATIONAL_ACCENT),
@@ -247,7 +269,7 @@ def render_email_html(week_label: str, domestic_summarized: list[dict], internat
     parts.append(
         '<p style="margin-top:28px; padding-top:16px; border-top:1px solid #eee; '
         'font-size:11px; color:#aaa; text-align:center;">'
-        '이 메일은 AI·IT 뉴스 큐레이션 시스템이 매주 자동으로 발송합니다.<br>'
+        '이 메일은 AI·IT 뉴스 큐레이션 시스템이 매일 자동으로 발송합니다.<br>'
         '이 요약은 AI가 자동으로 작성했으며, 실수가 있을 수 있습니다. '
         '정확한 내용은 원문 링크를 확인해주세요.</p>'
     )
@@ -280,14 +302,15 @@ def send_email(html_content: str, subject: str, recipients: list[str],
     return True
 
 
-def send_weekly_email(week_label: str, domestic_summarized: list[dict], international_summarized: list[dict],
-                       domestic_by_category: dict[str, list[dict]],
-                       international_by_category: dict[str, list[dict]],
-                       failed_sources: list[str],
-                       category_comparison: dict[str, dict[str, dict]] | None = None) -> bool:
+def send_daily_email(day_label: str, domestic_summarized: list[dict], international_summarized: list[dict],
+                      domestic_by_category: dict[str, list[dict]],
+                      international_by_category: dict[str, list[dict]],
+                      failed_sources: list[str],
+                      category_comparison: dict[str, dict[str, dict]] | None = None) -> bool:
     """
     main.py에서 부르는 단일 진입점. GitHub Secrets에서 인증정보를 읽고, 없으면 안전하게 생략.
-    week_label은 main.py의 ISO 연도-주차 형식("2026-31") 그대로 받는다.
+    day_label은 main.py의 YYYY-MM-DD 형식 그대로 받는다.
+    (예전 이름 send_weekly_email - 일간 전환하면서 리네임)
     """
     smtp_user = os.environ.get("SMTP_USER")
     smtp_app_password = os.environ.get("SMTP_APP_PASSWORD")
@@ -305,9 +328,9 @@ def send_weekly_email(week_label: str, domestic_summarized: list[dict], internat
         print("[deploy] 🔴 조치필요 [DP-04] - EMAIL_RECIPIENTS가 비어있음(콤마만 있거나 공백) - 이메일 발송 생략")
         return False
 
-    html_content = render_email_html(week_label, domestic_summarized, international_summarized,
+    html_content = render_email_html(day_label, domestic_summarized, international_summarized,
                                       domestic_by_category, international_by_category, failed_sources,
                                       category_comparison)
-    week_label_human = _humanize_week_label(week_label)
-    subject = f"[AI·IT 뉴스] {week_label_human} 주간 큐레이션"
+    day_label_human = _humanize_day_label(day_label)
+    subject = f"[AI·IT 뉴스] {day_label_human} 일간 큐레이션"
     return send_email(html_content, subject, recipients, smtp_user, smtp_app_password)

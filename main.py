@@ -8,11 +8,11 @@ AI·IT 뉴스 큐레이션 시스템의 오케스트레이션 레이어.
                     관련성 필터(relevance_filter) + 카테고리 재분류 + 이슈 그룹핑(issue_grouper -
                     1차 사전 매칭 + 2차 BGE-M3 임베딩 + 3차 LLM 보조)
   3) 스코어링    -> scorer.py가 이슈 단위 점수 계산 + 국내-해외 교차 매칭(🔗) +
-                    카테고리 전체 집계(category_aggregator, 지난주 대비 증감 포함)
+                    카테고리 전체 집계(category_aggregator, 전일/7일 평균 대비 증감 포함)
   4) LLM 요약    -> llm_summarizer.py: (A) 자체 요약 + (A-1) 얇은 재료 fallback.
                     (B) 그룹핑 보조는 issue_grouper.stage3_llm_assist. API 키 없음/호출
                     실패 시 "요약 생략, 원문 제목만 노출"로 안전하게 fallback
-  5) 저장        -> storage.py - data/YYYY-WW/에 raw.json/scored.json/summary.md 저장.
+  5) 저장        -> storage.py - data/YYYY-MM-DD/에 raw.json/scored.json/summary.md 저장.
                     git 커밋/푸시는 워크플로(run-pipline.yml) 책임.
   6) 배포        -> deploy.py - Gmail SMTP로 국내/해외 Top N + 카테고리별 Top N을 HTML
                     이메일 발송. 인증정보 미설정 시 발송만 안전하게 생략.
@@ -34,7 +34,7 @@ import relevance_filter
 import storage
 import deploy
 
-# 주간 Top N(국내/해외 각 축) + 카테고리별 Top N. 환경변수로 조정 가능, 미설정 시 기존 기본값(5/1).
+# 일간 Top N(국내/해외 각 축) + 카테고리별 Top N. 환경변수로 조정 가능, 미설정 시 기존 기본값(5/1).
 # CATEGORY_TOP_N을 올리면 LLM 요약 호출이 카테고리 수(최대 9) x 국내/해외(2) x 이 값만큼 늘어나므로
 # OpenRouter 무료 티어 일일 요청 한도를 고려해서 조정할 것.
 TOP_N = int(os.environ.get("TOP_N") or 5)
@@ -334,7 +334,7 @@ def run() -> None:
         scorer.print_category_top_n("국내", domestic_category_ranked, n=CATEGORY_TOP_N)
         scorer.print_category_top_n("해외", international_category_ranked, n=CATEGORY_TOP_N)
     except Exception as e:
-        print(f"[main] 🔴 조치필요 [MN-08] - [3] 스코어링 단계에서 예상 못 한 오류 발생 - 이번 주는 Top N 없이 진행"
+        print(f"[main] 🔴 조치필요 [MN-08] - [3] 스코어링 단계에서 예상 못 한 오류 발생 - 오늘은 Top N 없이 진행"
               f"(저장 단계에서 raw.json은 그대로 남음): {type(e).__name__} - {e!r}")
         domestic_ranked, international_ranked = [], []
         domestic_category_ranked, international_category_ranked = {}, {}
@@ -343,11 +343,11 @@ def run() -> None:
     # 이슈 그룹핑이 "동일 사건만" 묶는 좁은 정의라 생기는 공백을 메우는 거친 보조 지표 (category_aggregator.py 참고)
     try:
         category_distribution = category_aggregator.aggregate(articles)
-        # 지난주 데이터 없으면(첫 실행 등) compare_with_last_week가 안전하게 None 반환
-        category_comparison = category_aggregator.compare_with_last_week(category_distribution)
-        category_aggregator.print_aggregate_with_comparison(category_distribution, category_comparison)
+        # 과거 데이터 없으면(첫 실행 등) compare_with_history가 안전하게 None 반환
+        category_comparison = category_aggregator.compare_with_history(category_distribution)
+        category_aggregator.print_aggregate_with_history(category_distribution, category_comparison)
     except Exception as e:
-        print(f"[main] 🔴 조치필요 [MN-09] - [3-보조] 카테고리 집계 단계에서 예상 못 한 오류 발생 - 이번 주는 집계 없이 진행: "
+        print(f"[main] 🔴 조치필요 [MN-09] - [3-보조] 카테고리 집계 단계에서 예상 못 한 오류 발생 - 오늘은 집계 없이 진행: "
               f"{type(e).__name__} - {e!r}")
         category_distribution, category_comparison = {}, None
 
@@ -377,31 +377,31 @@ def run() -> None:
             domestic_category_ranked, international_category_ranked)
 
     print("\n=== [5] 저장 ===")
-    # 수동 실행(workflow_dispatch)은 테스트/임시 확인용이라 저장하면 안 됨 - "지난주 대비 증감"
-    # 비교 기준이 테스트 데이터로 오염될 수 있음(예: 토요일 테스트 실행이 다음 월요일 정식 실행의 "지난주 실적"으로 잘못 비교되는 사고).
+    # 수동 실행(workflow_dispatch)은 테스트/임시 확인용이라 저장하면 안 됨 - "전일/7일 평균 대비 증감"
+    # 비교 기준이 테스트 데이터로 오염될 수 있음(예: 화요일 테스트 실행이 수요일 정식 실행의 "전일 실적"으로 잘못 비교되는 사고).
     # GITHUB_EVENT_NAME은 GitHub Actions 자동 환경변수 (로컬 등 없는 환경에선 "수동 아님"으로 처리)
     is_manual_run = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
     if is_manual_run:
         print("[main] 수동 실행(workflow_dispatch)이라 저장을 건너뜁니다 - "
-              "'지난주 대비 증감' 비교 기준 오염 방지(콘솔에 출력된 이번 실행 결과는 그대로 확인 가능, data/에는 안 남음)")
+              "'전일/7일 평균 대비 증감' 비교 기준 오염 방지(콘솔에 출력된 이번 실행 결과는 그대로 확인 가능, data/에는 안 남음)")
         saved_dir = None
     else:
         try:
-            saved_dir = storage.save_week(articles, domestic_summarized, international_summarized,
-                                           domestic_category_summarized, international_category_summarized,
-                                           gdelt_timeline, failed_sources, category_distribution,
-                                           category_comparison)
+            saved_dir = storage.save_day(articles, domestic_summarized, international_summarized,
+                                          domestic_category_summarized, international_category_summarized,
+                                          gdelt_timeline, failed_sources, category_distribution,
+                                          category_comparison)
         except Exception as e:
             print(f"[main] 🔴 조치필요 [MN-12] - 저장 단계에서 예상 못 한 오류 발생(콘솔 로그의 결과는 그대로 유효함): "
                   f"{type(e).__name__} - {e!r}")
             saved_dir = None
     print("\n=== [6] 배포 ===")
-    # week_label은 저장이 성공했으면 그 디렉토리 이름을 재사용(주차 계산 중복 방지), 저장이 실패한 드문 경우만 직접 계산.
+    # day_label은 저장이 성공했으면 그 디렉토리 이름을 재사용(날짜 계산 중복 방지), 저장이 실패한 드문 경우만 직접 계산.
     try:
-        week_label = os.path.basename(saved_dir) if saved_dir else datetime.now(timezone.utc).strftime("%G-%V")
-        deploy.send_weekly_email(week_label, domestic_summarized, international_summarized,
-                                  domestic_category_summarized, international_category_summarized,
-                                  failed_sources, category_comparison)
+        day_label = os.path.basename(saved_dir) if saved_dir else datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        deploy.send_daily_email(day_label, domestic_summarized, international_summarized,
+                                 domestic_category_summarized, international_category_summarized,
+                                 failed_sources, category_comparison)
     except Exception as e:
         print(f"[main] 🔴 조치필요 [MN-13] - 배포 단계에서 예상 못 한 오류 발생(콘솔 로그의 결과는 그대로 유효함): "
               f"{type(e).__name__} - {e!r}")

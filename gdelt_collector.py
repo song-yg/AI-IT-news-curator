@@ -302,8 +302,11 @@ def _is_false_positive(keyword: str, title: str) -> bool:
     title_normalized = _normalize_spacing(title.lower())
     return any(_normalize_spacing(p.lower()) in title_normalized for p in patterns)
 
-# 이 프로젝트는 주 1회 실행이므로, 최근 7일 이내 기사만 남긴다 (naver/watt와 동일 방침).
-DAYS_BACK = 7
+# 이 프로젝트는 매일 새벽 실행이므로, 전날(최근 1일) 이내 기사만 남긴다 (naver/watt와 동일 방침).
+# (예전엔 주 1회 실행이라 7일이었음 - 일간 전환하면서 변경. 부수 효과로 TIMESPAN 창이
+# 좁아져서 GDELT 250건 상한 크라우딩도 완화됨 - 한 키워드가 짧은 기간에 250건을 채우기가
+# 7일 창일 때보다 훨씬 어려움)
+DAYS_BACK = 1
 
 # GDELT DOC API의 TIMESPAN 파라미터 포맷: 숫자+단위(min/h/d/w/m) 확인됨
 # (GDELT 공식 블로그 "GDELT DOC 2.0 API Debuts!" 기준 - 검색으로 검증함)
