@@ -40,27 +40,30 @@ import deploy
 TOP_N = int(os.environ.get("TOP_N") or 5)
 CATEGORY_TOP_N = int(os.environ.get("CATEGORY_TOP_N") or 1)
 
-# --- 파이프라인 전역 공유 시간예산 ---
+# --- 파이프라인 전역 시간예산: 단계별 체크포인트 ---
 #
-# GDELT 수집(gdelt_collector), 관련성 필터/카테고리 재분류(relevance_filter), 3차 이슈
-# 그룹핑 LLM 보조(issue_grouper) 네 곳이 전부 자기만의 시간예산(TIME_BUDGET_SECONDS 등)을
-# 따로 갖고 있었는데, 그건 서로 독립적인 "최대치"일 뿐이라 넷 다 최악의 경우를 동시에
-# 찍으면 GitHub Actions 잡 하드 캡(360분)을 훌쩍 넘겨버리는 문제가 있었다(각자 5시간+
-# 120분+90분+45분 = 555분).
+# GDELT 수집(gdelt_collector), 관련성 필터/카테고리 재분류(relevance_filter), 이슈 그룹핑
+# 1~3차(issue_grouper.group_issues), 4차 Top N 사후 재검토(issue_grouper.stage4_dedupe_and_promote),
+# LLM 요약(llm_summarizer, 국내/해외+카테고리별) 다섯 구간이 파이프라인 시작(0분)부터 이 누적
+# 체크포인트(분)까지 끝나야 한다. 앞 구간이 일찍 끝나면 그만큼이 자동으로 뒤 구간에 남고,
+# 늦게 끝나면 뒤 구간이 실제로 쓸 수 있는 시간이 그만큼 줄어든다(각 단계는 "이 구간에 배정된
+# 시간"이 아니라 "이 구간이 끝나야 하는 절대 시각"만 알면 됨 - main.py가 그 시각을 계산해서
+# 넘겨준다).
 #
-# 그래서 main.py가 파이프라인 시작 시점에 절대 마감 시각(deadline, time.monotonic() 기준)을
-# 한 번만 계산해서 위 네 단계 호출부에 전부 그대로 넘겨준다 - 앞 단계가 시간을 많이 썼으면
-# 뒷 단계가 실제로 쓸 수 있는 여유는 자동으로 줄어들고(더해서 재조정할 필요 없음), 앞
-# 단계가 일찍 끝나면 그만큼 뒷 단계에 자연히 남는다. 각 모듈의 TIME_BUDGET_SECONDS 상수는
-# 이제 이 deadline을 못 받았을 때(standalone 테스트 등)만 쓰는 모듈 자체 기본값으로 격하됨.
-#
-# 300분(5시간)으로 잡은 근거: GitHub Actions 잡 하드 캡 360분에서, 이 예산 추적 범위 밖에
-# 있는 단계들 몫으로 최소 60분을 남겨둔다 - 체크아웃/디스크 정리/Python·의존성 설치/BGE-M3
-# 캐시(위 네 단계 시작 *전*), 네이버 수집(예산 없음, 다만 재시도 루프가 없어 위험 낮음),
-# 임베딩 1차/2차(로컬 CPU라 짧음), 4차 Top N 사후 재검토·LLM 요약 두 번(둘 다 아직 시간예산
-# 없음 - TOP_N이 고정값이라 수집량과 무관하게 규모가 안 커져서 상대적으로 안전), 저장/배포/
-# git 커밋·푸시(위 단계 이후).
-PIPELINE_TIME_BUDGET_SECONDS = 300 * 60  # 300분(5시간)
+# 4차 재검토/LLM 요약은 이전엔 시간예산 자체가 없었는데(TOP_N이 고정값이라 상대적으로 안전하다고
+# 봤음) 이번에 추가함 - issue_grouper.stage4_dedupe_and_promote / llm_summarizer.summarize_top_issues
+# 둘 다 deadline 인자를 받도록 되어 있음.
+_CHECKPOINT_GDELT_MIN = 220        # GDELT 수집 종료
+_CHECKPOINT_RELEVANCE_MIN = 270    # + 관련성 필터/카테고리 재분류 (220 + 50)
+_CHECKPOINT_GROUPING_MIN = 305     # + 이슈 그룹핑 1~3차 (270 + 35)
+_CHECKPOINT_STAGE4_MIN = 310       # + 4차 Top N 사후 재검토 (305 + 5)
+_CHECKPOINT_SUMMARY_MIN = 355      # + LLM 요약 (310 + 45) - 파이프라인 전체 예산
+
+# GitHub Actions 잡 하드 캡 360분 대비 여유가 5분뿐이라, 이 예산 추적 범위 밖에 있는 단계들
+# (체크아웃/디스크 정리/Python·의존성 설치/BGE-M3 캐시/네이버 수집 - 위 구간 시작 *전*,
+# 저장/배포/git 커밋·푸시 - 위 구간 종료 *후*)이 5분 안에 끝나야 함. 로컬 체감상 여유가 있는
+# 값들이지만, 빠듯한 편이라는 점은 감안할 것 - 필요하면 위 체크포인트를 낮춰서 버퍼를 늘릴 수 있음.
+PIPELINE_TIME_BUDGET_SECONDS = _CHECKPOINT_SUMMARY_MIN * 60  # 355분(5시간 55분) - 참고용 총합
 
 
 
@@ -136,7 +139,8 @@ def normalize(articles: list[dict]) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def score(articles: list[dict], model, top_n: int = TOP_N,
-          deadline: float | None = None) -> tuple[list[dict], list[dict], dict, dict]:
+          grouping_deadline: float | None = None,
+          stage4_deadline: float | None = None) -> tuple[list[dict], list[dict], dict, dict]:
     """
     이슈 그룹핑(issue_grouper.group_issues) + 국내/해외 개별 랭킹(Top N) 수행.
 
@@ -157,8 +161,12 @@ def score(articles: list[dict], model, top_n: int = TOP_N,
 
     model: SentenceTransformer 인스턴스 또는 None (None이면 issue_grouper가 1차 결과만으로 fallback).
 
-    deadline: 파이프라인 전역 공유 예산의 절대 마감 시각. issue_grouper.group_issues()(그 안의
-    3차 LLM 보조)에 그대로 전달한다.
+    grouping_deadline: 파이프라인 전역 공유 예산에서 이 단계(그룹핑 1~3차) 몫의 절대 마감 시각.
+    issue_grouper.group_issues()(그 안의 3차 LLM 보조)에 그대로 전달한다.
+
+    stage4_deadline: 파이프라인 전역 공유 예산에서 4차 Top N 사후 재검토 몫의 절대 마감 시각.
+    grouping_deadline보다 늦은 시점 - 그룹핑이 끝난 뒤에 시작하는 별도 단계라 체크포인트가 다르다.
+    issue_grouper.stage4_dedupe_and_promote() 호출(국내/해외 + 카테고리별 최대 18회)에 전부 전달.
 
     카테고리별 Top N도 함께 계산해서 반환 - 국내/해외 각 축 안에서 scorer.score_by_category()로
     (최대 카테고리 9개 x 국내/해외 2개 = 최대 18개 리스트). N값은 CATEGORY_TOP_N으로 조정.
@@ -169,7 +177,7 @@ def score(articles: list[dict], model, top_n: int = TOP_N,
     같은 사건인지 LLM으로 한 번 더 확인 후 병합하고 빈 자리는 다음 순위로 채운다.
     카테고리별은 scorer.score_by_category의 dedupe_fn 콜백으로 연결한다.
     """
-    groups = issue_grouper.group_issues(articles, model=model, deadline=deadline)
+    groups = issue_grouper.group_issues(articles, model=model, deadline=grouping_deadline)
 
     domestic_groups = []
     international_groups = []
@@ -197,12 +205,15 @@ def score(articles: list[dict], model, top_n: int = TOP_N,
     domestic_ranked_pool = scorer.score_and_rank(domestic_groups, top_n=None)
     international_ranked_pool = scorer.score_and_rank(international_groups, top_n=None)
 
-    domestic_ranked = issue_grouper.stage4_dedupe_and_promote(domestic_ranked_pool, top_n=top_n, label="국내")
-    international_ranked = issue_grouper.stage4_dedupe_and_promote(international_ranked_pool, top_n=top_n, label="해외")
+    domestic_ranked = issue_grouper.stage4_dedupe_and_promote(
+        domestic_ranked_pool, top_n=top_n, label="국내", deadline=stage4_deadline)
+    international_ranked = issue_grouper.stage4_dedupe_and_promote(
+        international_ranked_pool, top_n=top_n, label="해외", deadline=stage4_deadline)
 
     def _category_dedupe_fn(axis_label: str):
         def _fn(ranked_pool, n, category):
-            return issue_grouper.stage4_dedupe_and_promote(ranked_pool, top_n=n, label=f"{axis_label}-{category}")
+            return issue_grouper.stage4_dedupe_and_promote(
+                ranked_pool, top_n=n, label=f"{axis_label}-{category}", deadline=stage4_deadline)
         return _fn
 
     domestic_category_ranked = scorer.score_by_category(
@@ -251,23 +262,27 @@ def _regroup_by_category(items: list[dict]) -> dict[str, list[dict]]:
 
 def step4_category_llm_summary(domestic_category_ranked: dict[str, list[dict]],
                                 international_category_ranked: dict[str, list[dict]],
+                                deadline: float | None = None,
                                 ) -> tuple[dict[str, list[dict]], dict[str, list[dict]]]:
     """
     step4_llm_summary와 같은 (A)/(A-1) 로직을 카테고리별 Top N 결과에 적용.
     {카테고리: [항목]} 형태를 평평한 리스트로 합쳐서 요약(카테고리 축마다 세션 하나로 묶어 API 호출 오버헤드 절감) 후 다시 카테고리별로 묶어 반환.
+
+    deadline: 파이프라인 전역 공유 예산의 절대 마감 시각. summarize_top_issues 두 호출에 그대로 전달.
     """
     domestic_flat = [item for items in domestic_category_ranked.values() for item in items]
     international_flat = [item for items in international_category_ranked.values() for item in items]
 
-    domestic_summarized_flat = llm_summarizer.summarize_top_issues(domestic_flat, label="국내-카테고리")
-    international_summarized_flat = llm_summarizer.summarize_top_issues(international_flat, label="해외-카테고리")
+    domestic_summarized_flat = llm_summarizer.summarize_top_issues(domestic_flat, label="국내-카테고리", deadline=deadline)
+    international_summarized_flat = llm_summarizer.summarize_top_issues(international_flat, label="해외-카테고리", deadline=deadline)
 
     return (_regroup_by_category(domestic_summarized_flat),
             _regroup_by_category(international_summarized_flat))
 
 
 def step4_llm_summary(domestic_ranked: list[dict],
-                       international_ranked: list[dict]) -> tuple[list[dict], list[dict]]:
+                       international_ranked: list[dict],
+                       deadline: float | None = None) -> tuple[list[dict], list[dict]]:
     """
     (A) 자체 요약 + (A-1) 얇은 재료 fallback.
     실제 로직은 llm_summarizer.py, 여기는 국내/해외를 각각 넘기는 얇은 호출부다.
@@ -275,9 +290,11 @@ def step4_llm_summary(domestic_ranked: list[dict],
 
     domestic_ranked/international_ranked는 score()에서 이미 TOP_N으로 제한된 상태 (추가로 안 자름).
     반환값은 입력과 같은 형태에 "summary"/"summary_skipped_reason" 필드가 추가된 것.
+
+    deadline: 파이프라인 전역 공유 예산의 절대 마감 시각. summarize_top_issues 두 호출에 그대로 전달.
     """
-    domestic_summarized = llm_summarizer.summarize_top_issues(domestic_ranked, label="국내")
-    international_summarized = llm_summarizer.summarize_top_issues(international_ranked, label="해외")
+    domestic_summarized = llm_summarizer.summarize_top_issues(domestic_ranked, label="국내", deadline=deadline)
+    international_summarized = llm_summarizer.summarize_top_issues(international_ranked, label="해외", deadline=deadline)
     return domestic_summarized, international_summarized
 
 
@@ -286,12 +303,17 @@ def step4_llm_summary(domestic_ranked: list[dict],
 # ---------------------------------------------------------------------------
 
 def run() -> None:
-    # 파이프라인 전역 공유 예산 - 이 시점 기준 절대 마감 시각을 한 번만 계산해서
-    # 아래 GDELT 수집/관련성 필터/카테고리 재분류/이슈 그룹핑 3차 LLM 보조에 그대로 넘긴다.
-    pipeline_deadline = time.monotonic() + PIPELINE_TIME_BUDGET_SECONDS
+    # 파이프라인 전역 시간예산 - 이 시점(0분) 기준으로 위 5개 체크포인트(분)를 절대 마감
+    # 시각으로 한 번에 계산해서 아래 각 단계 호출부에 맞는 것을 넘긴다.
+    pipeline_start = time.monotonic()
+    deadline_gdelt = pipeline_start + _CHECKPOINT_GDELT_MIN * 60
+    deadline_relevance = pipeline_start + _CHECKPOINT_RELEVANCE_MIN * 60
+    deadline_grouping = pipeline_start + _CHECKPOINT_GROUPING_MIN * 60
+    deadline_stage4 = pipeline_start + _CHECKPOINT_STAGE4_MIN * 60
+    deadline_summary = pipeline_start + _CHECKPOINT_SUMMARY_MIN * 60
 
     print("=== [1] 수집 시작 ===")
-    articles, gdelt_timeline, failed_sources = run_collectors(deadline=pipeline_deadline)
+    articles, gdelt_timeline, failed_sources = run_collectors(deadline=deadline_gdelt)
 
     print("\n=== [2] 정규화 ===")
     # 이 단계부터 [4-보조]까지 각 단계를 안전망으로 감싼다.
@@ -307,7 +329,7 @@ def run() -> None:
     print("\n=== [2.5] 관련성 필터 ===")
     # 키워드 매칭만으로 못 거르는 오매칭(동음이의어, 각주성 언급 등)을 LLM이 맥락으로 판단해 필터링
     try:
-        articles = relevance_filter.filter_articles(articles, deadline=pipeline_deadline)
+        articles = relevance_filter.filter_articles(articles, deadline=deadline_relevance)
     except Exception as e:
         print(f"[main] 🔴 조치필요 [MN-06] - [2.5] 관련성 필터 단계에서 예상 못 한 오류 발생 - 필터링 없이 다음 단계로 진행: "
               f"{type(e).__name__} - {e!r}")
@@ -316,7 +338,7 @@ def run() -> None:
     # keyword_tagger(사전 매칭)와 relevance_filter(LLM 판단)의 기준이 달라서, 사전엔 안 걸려 "기타"로 붙었는데
     # relevance_filter는 "관련 있음"으로 확정하는 기사가 생길 수 있다 - 이런 기사만 다시 LLM에 물어 재분류.
     try:
-        articles = relevance_filter.recategorize_uncategorized(articles, deadline=pipeline_deadline)
+        articles = relevance_filter.recategorize_uncategorized(articles, deadline=deadline_relevance)
     except Exception as e:
         print(f"[main] 🔴 조치필요 [MN-07] - [2.6] 카테고리 재분류 단계에서 예상 못 한 오류 발생 - 재분류 없이 다음 단계로 진행: "
               f"{type(e).__name__} - {e!r}")
@@ -328,7 +350,8 @@ def run() -> None:
     try:
         (domestic_ranked, international_ranked,
          domestic_category_ranked, international_category_ranked) = score(
-            articles, embedding_model, top_n=TOP_N, deadline=pipeline_deadline)
+            articles, embedding_model, top_n=TOP_N,
+            grouping_deadline=deadline_grouping, stage4_deadline=deadline_stage4)
         scorer.print_top_n("국내", domestic_ranked, n=TOP_N)
         scorer.print_top_n("해외", international_ranked, n=TOP_N)
         scorer.print_category_top_n("국내", domestic_category_ranked, n=CATEGORY_TOP_N)
@@ -354,7 +377,7 @@ def run() -> None:
     print("\n=== [4] 국내/해외 LLM 요약 생성 ===")
     try:
         domestic_summarized, international_summarized = step4_llm_summary(
-            domestic_ranked, international_ranked)
+            domestic_ranked, international_ranked, deadline=deadline_summary)
         llm_summarizer.print_summaries("국내", domestic_summarized)
         llm_summarizer.print_summaries("해외", international_summarized)
     except Exception as e:
@@ -365,7 +388,7 @@ def run() -> None:
     print("\n=== [4-보조] 카테고리별 LLM 요약 생성 ===")
     try:
         domestic_category_summarized, international_category_summarized = step4_category_llm_summary(
-            domestic_category_ranked, international_category_ranked)
+            domestic_category_ranked, international_category_ranked, deadline=deadline_summary)
         for category, items in domestic_category_summarized.items():
             llm_summarizer.print_summaries(f"국내-{category}", items)
         for category, items in international_category_summarized.items():

@@ -11,6 +11,7 @@ API 키 없음/LLM 호출·응답 실패 시 요약을 생략하고 원문 제�
 """
 
 import os
+import time
 
 import requests
 import trafilatura
@@ -274,11 +275,18 @@ def summarize_issue(item: dict, session: requests.Session | None = None) -> dict
     return result
 
 
-def summarize_top_issues(ranked_items: list[dict], label: str = "") -> list[dict]:
+def summarize_top_issues(ranked_items: list[dict], label: str = "",
+                          deadline: float | None = None) -> list[dict]:
     """
-    scorer.score_and_rank() 결과 전체에 summarize_issue를 적용 (main.py의 4단계 호출부에서 국내/해외 각각 부름).
+    scorer.score_and_rank() 결과 전체에 summarize_issue를 적용 (main.py의 4단계 호출부에서 국내/해외/카테고리별 각각 부름).
 
     이슈 하나당 LLM 호출이 몇 초~몇십 초 걸릴 수 있어(무료 모델은 특히), 항목 하나 처리할 때마다 바로 로그를 찍어 실행 상태를 실시간으로 볼 수 있게 한다.
+
+    deadline: time.monotonic() 기준 절대 마감 시각. main.py가 파이프라인 전역 공유 예산에서
+    계산해 넘겨준다 - 국내/해외 + 카테고리별(최대 18개) 호출이 전부 같은 deadline을 공유하므로
+    앞서 처리한 호출이 시간을 많이 썼으면 뒤 호출의 실제 여유가 자동으로 줄어든다. 예산을 넘기면
+    남은 이슈는 이 함수가 이미 쓰는 안전한 기본값(LLM 실패 시 fallback)과 동일하게 "요약 생략,
+    원문 제목만 노출"로 처리 - 안 넘겨받으면(standalone 테스트 등) 예산 체크 자체를 안 함(무제한).
     """
     results = []
     total = len(ranked_items)
@@ -287,6 +295,17 @@ def summarize_top_issues(ranked_items: list[dict], label: str = "") -> list[dict
             titles = item.get("titles", [])
             rep_title = titles[0] if titles else "(제목 없음)"
             prefix = f"[llm_summarizer] {label} " if label else "[llm_summarizer] "
+
+            if deadline is not None and time.monotonic() >= deadline:
+                print(f"{prefix}({i}/{total}) 🟡 주의 - 요약 시간 예산 소진(전역 파이프라인 마감 도달) - "
+                      f"남은 {total - i + 1}건 전부 요약 생략, 원문 제목만 노출")
+                for remaining_item in ranked_items[i - 1:]:
+                    remaining_result = dict(remaining_item)
+                    remaining_result["summary"] = None
+                    remaining_result["summary_skipped_reason"] = "시간 예산 소진 - 요약 생략, 원문 제목만 노출"
+                    results.append(remaining_result)
+                break
+
             print(f"{prefix}({i}/{total}) '{rep_title}' (그룹 {len(titles)}건) - 처리 중...")
 
             result = summarize_issue(item, session)

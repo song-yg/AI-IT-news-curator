@@ -839,12 +839,21 @@ def _call_stage4_llm(pairs: list[tuple[dict, dict]], api_key: str, session: requ
     return results
 
 
-def stage4_dedupe_and_promote(ranked_pool: list[dict], top_n: int, label: str = "") -> list[dict]:
+def stage4_dedupe_and_promote(ranked_pool: list[dict], top_n: int, label: str = "",
+                               deadline: float | None = None) -> list[dict]:
     """
     ranked_pool(top_n 제한 없는 전체 순위 풀) 상위 top_n을 후보로 삼아 같은
     사건 쌍을 LLM으로 재확인, 병합하고 빈 자리는 다음 순위로 채운다.
     회차당 병합 1건만 적용 후 재판단, 최대 3회. API 키 없으면 기존 순위 그대로 반환.
     반환값은 scorer.score_and_rank(top_n=N)과 동일한 형태.
+
+    deadline: time.monotonic() 기준 절대 마감 시각. main.py가 파이프라인 전역 공유 예산에서
+    계산해 넘겨준다 - 안 넘겨받으면(예: 이 함수만 따로 테스트) 예산 체크 자체를 안 함(무제한).
+    main.py에서 국내/해외 Top N + 카테고리별 Top N(최대 18개) 전부에 이 함수가 쓰이는데,
+    카테고리 쪽은 CATEGORY_TOP_N이 보통 1이라 candidates가 2개 미만이면 LLM 호출 없이 즉시
+    반환되므로 실질적으로 시간을 오래 쓰는 건 국내/해외 Top N 호출 정도 - 회차 시작 전마다
+    체크해서 예산을 넘기면 그 라운드부터는 병합을 포기하고 지금까지의 candidates를 그대로 반환한다
+    (병합이 덜 될 뿐, 순위 자체는 항상 유효한 상태라 안전한 기본값).
     """
     if top_n is None:
         top_n = len(ranked_pool)
@@ -868,6 +877,11 @@ def stage4_dedupe_and_promote(ranked_pool: list[dict], top_n: int, label: str = 
     with requests.Session() as session:
         for round_idx in range(1, max_rounds + 1):
             if len(candidates) < 2:
+                break
+
+            if deadline is not None and time.monotonic() >= deadline:
+                print(f"{prefix}🟡 주의 - 4차 Top N 재검토 시간 예산 소진(전역 파이프라인 마감 도달) - "
+                      f"{round_idx}회차부터 중단, 지금까지의 순위를 그대로 사용")
                 break
 
             index_pairs = list(combinations(range(len(candidates)), 2))
