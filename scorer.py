@@ -1,6 +1,9 @@
 """
 scorer.py
-언급빈도 x 최신가중치 계산(Scoring) 담당. 순수 계산만 함 - LLM 안 씀.
+언급빈도 계산(Scoring) 담당. 순수 계산만 함 - LLM 안 씀.
+(예전엔 "언급빈도 x 최신가중치"였음 - 일간 전환 이후 최신가중치를 없애고 mention_count
+그대로를 issue_score로 씀. 대신 "24시간 초과 신선도 판정"(is_stale)을 여기서 제공하고,
+실제 필터링은 main.py가 정규화 직후 수행함 - 아래 "신선도 판정" 섹션 참고)
 
 이 모듈의 함수는 전부 "이슈 그룹"(같은 사건 기사 묶음, list[dict])을 입력으로 받는다.
 실제 그룹핑(BGE-M3)은 issue_grouper.group_issues()가 하고, 여기서는 결과를 스코어링만 함.
@@ -15,33 +18,35 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
 
-# --- recency_weight: 계단형 가중치 ---
-# 담당자가 수식 이해 없이 이 표의 숫자만 바꾸면 조정 가능하도록 계단형으로 확정.
-RECENCY_WEIGHT_TABLE = [
-    # (경과일수 상한(포함), weight) - 순서대로 검사, 마지막 항목이 "8일 이상"
-    (2, 1.0),
-    (5, 0.7),
-    (7, 0.4),
-]
-RECENCY_WEIGHT_DEFAULT = 0.1  # 8일 이상
+# --- 신선도(freshness) 판정 ---
+#
+# 예전엔 여기 recency_weight(계단형 가중치)가 있었음 - 일간 전환(DAYS_BACK=1) 이후 재검토한
+# 결과, 데일리 배치 구조에서는 오히려 역효과였음: naver/gdelt 각 collector가 "수집 시점
+# 기준 24시간 이내"로 이미 걸러주는데, 실제 스코어링은 그보다 한참 뒤(GDELT 수집에 최대
+# 220분, 이후 필터링/그룹핑까지 몇 시간 더)에 일어나서 recency_weight가 "얼마나 오래된
+# 뉴스냐"가 아니라 "하루 중 몇 시 뉴스냐"에 더 가깝게 작동했음 - 늦게 터진 속보는 아직
+# 언론사들이 못 받아써서 mention_count가 원래 낮은데 가중치까지 높게 받고, 일찍 터져서
+# 하루 종일 보도된(그래서 mention_count가 높은) 이슈는 가중치가 깎이는 이중 왜곡이 있었음.
+# 그래서 가중치는 완전히 없애고 issue_score = mention_count로 단순화하고, 대신 "24시간
+# 초과"는 가중치로 깎는 게 아니라 아예 스코어링 이전 단계(main.py normalize 직후)에서
+# 걸러내기로 함(is_stale 참고) - 그 시점 기준으로 걸러야 스코어링 시점까지 시간이 더
+# 지나면서 새로 24시간을 넘기는 경계 사례를 최대한 줄일 수 있다.
+FRESHNESS_WINDOW_HOURS = 24  # naver/gdelt 둘 다 DAYS_BACK=1(24시간)과 맞춤
 
 
-def recency_weight(days_elapsed: int) -> float:
-    """발행일로부터 경과일수에 따른 계단형 가중치."""
-    for max_days, weight in RECENCY_WEIGHT_TABLE:
-        if days_elapsed <= max_days:
-            return weight
-    return RECENCY_WEIGHT_DEFAULT
-
-
-def _days_elapsed(published_at: str, reference: datetime | None = None) -> int:
-    """경과일수 계산 (기준 시각 기본값은 지금). 미래 날짜 등 이상치는 0으로 clamp."""
+def hours_elapsed(published_at: str, reference: datetime | None = None) -> float:
+    """경과시간 계산(시간 단위, 기준 시각 기본값은 지금). 미래 날짜 등 이상치는 0으로 clamp."""
     pub_dt = datetime.fromisoformat(published_at)
     ref = reference if reference is not None else datetime.now(pub_dt.tzinfo or timezone.utc)
     if pub_dt.tzinfo is None:
         pub_dt = pub_dt.replace(tzinfo=timezone.utc)
-    delta_days = (ref - pub_dt).days
-    return max(0, delta_days)
+    delta_seconds = (ref - pub_dt).total_seconds()
+    return max(0.0, delta_seconds / 3600)
+
+
+def is_stale(published_at: str, reference: datetime | None = None) -> bool:
+    """FRESHNESS_WINDOW_HOURS(24시간)를 넘겼는지 - main.py가 정규화 직후 이 기준으로 걸러낸다."""
+    return hours_elapsed(published_at, reference) > FRESHNESS_WINDOW_HOURS
 
 
 # --- 동일 언론사 도배 dedup ---
@@ -75,12 +80,16 @@ def dedup_group_by_press(group: list[dict], cap: int = PRESS_DEDUP_CAP) -> list[
     return kept
 
 
-def score_group(group: list[dict], reference: datetime | None = None) -> dict:
+def score_group(group: list[dict]) -> dict:
     """
     이슈 그룹 하나를 스코어링한다.
 
     반환값:
-      issue_score: Σ recency_weight(경과일수) - dedup 이후 기사 기준 (dedup은 점수 계산과 화면 노출 숫자 양쪽에 동일 적용)
+      issue_score: mention_count와 동일(dedup 이후 건수) - 예전엔 recency_weight를 곱해
+        더한 값이었는데, 일간 전환 이후 재검토해서 가중치를 없앴다(신선도는 이제
+        스코어링이 아니라 main.py 정규화 직후 is_stale()로 아예 걸러내는 쪽으로 이동 -
+        위 "신선도 판정" 섹션 참고). 그래도 필드 자체는 정렬/화면 표시에 계속 쓰이므로
+        이름은 유지.
       mention_count: dedup 이후 건수 (화면 노출용)
       raw_mention_count: dedup 이전 원본 건수 (data/scored.json에만 보존)
       titles / urls: 그룹 내 전체 제목/원문 링크 (LLM 요약 단계에서 사용)
@@ -90,10 +99,7 @@ def score_group(group: list[dict], reference: datetime | None = None) -> dict:
     """
     raw_mention_count = len(group)
     deduped = dedup_group_by_press(group)
-
-    issue_score = sum(
-        recency_weight(_days_elapsed(a["published_at"], reference)) for a in deduped
-    )
+    mention_count = len(deduped)
 
     cross_axis_partner = None
     for a in group:
@@ -102,8 +108,8 @@ def score_group(group: list[dict], reference: datetime | None = None) -> dict:
             break
 
     return {
-        "issue_score": round(issue_score, 3),
-        "mention_count": len(deduped),
+        "issue_score": mention_count,
+        "mention_count": mention_count,
         "raw_mention_count": raw_mention_count,
         "titles": [a["title"] for a in group],
         "urls": [a["url"] for a in group],
@@ -113,8 +119,7 @@ def score_group(group: list[dict], reference: datetime | None = None) -> dict:
     }
 
 
-def score_and_rank(groups: list[list[dict]], top_n: int | None = None,
-                    reference: datetime | None = None) -> list[dict]:
+def score_and_rank(groups: list[list[dict]], top_n: int | None = None) -> list[dict]:
     """
     이슈 그룹 리스트를 스코어링하고 issue_score 내림차순 정렬.
     top_n 지정 시 상위 N개만 반환(main.py에서 LLM 요약 호출 전 top_n=5로 넘기면 "일간 Top 5" 운영이 됨).
@@ -122,7 +127,7 @@ def score_and_rank(groups: list[list[dict]], top_n: int | None = None,
     각 축(국내/해외)의 원본 issue_score를 그대로 비교 - 정규화나 통합 종합 랭킹은 만들지 않음.
     (이 함수는 이미 한 축으로 분리된 groups만 받는다는 전제, 호출부가 국내/해외 각각 호출)
     """
-    scored = [score_group(g, reference) for g in groups]
+    scored = [score_group(g) for g in groups]
     scored.sort(key=lambda s: s["issue_score"], reverse=True)
     return scored[:top_n] if top_n is not None else scored
 
@@ -232,7 +237,7 @@ def print_category_top_n(label: str, category_ranked: dict[str, list[dict]], n: 
         print(f"\n[{category}]")
         for i, item in enumerate(ranked, start=1):
             rep_title = item["titles"][0] if item["titles"] else "(제목 없음)"
-            print(f"  {i}. [{item['issue_score']:.2f}점, 언급 {item['mention_count']}건] {rep_title}")
+            print(f"  {i}. [언급 {item['mention_count']}건] {rep_title}")
             if len(item["titles"]) > 1:
                 print(f"     (그룹 내 추가 {len(item['titles']) - 1}건 생략)")
             if item.get("cross_axis_partner"):
@@ -244,7 +249,7 @@ def print_top_n(label: str, ranked: list[dict], n: int = 5) -> None:
     print(f"\n=== {label} Top {min(n, len(ranked))} ===")
     for i, item in enumerate(ranked[:n], start=1):
         rep_title = item["titles"][0] if item["titles"] else "(제목 없음)"
-        print(f"{i}. [{item['issue_score']:.2f}점, 언급 {item['mention_count']}건] {rep_title}")
+        print(f"{i}. [언급 {item['mention_count']}건] {rep_title}")
         if len(item["titles"]) > 1:
             print(f"   (그룹 내 추가 {len(item['titles']) - 1}건 생략)")
         if item.get("cross_axis_partner"):

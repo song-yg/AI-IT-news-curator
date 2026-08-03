@@ -137,7 +137,7 @@ def _format_issue_section(item: dict) -> str:
     rep_title = titles[0] if titles else "(제목 없음)"
     lines = [
         f"### {rep_title}",
-        f"- 점수: {item.get('issue_score', 0):.2f} / 언급 {item.get('mention_count', 0)}건"
+        f"- 언급 {item.get('mention_count', 0)}건"
         + (f" (그룹 내 추가 {len(titles) - 1}건 생략)" if len(titles) > 1 else ""),
     ]
     if item.get("cross_axis_partner"):

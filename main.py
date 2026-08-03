@@ -116,6 +116,13 @@ def normalize(articles: list[dict]) -> list[dict]:
     """
     완전 동일 기사(같은 URL 중복 수집) 제거 - 이슈 그룹핑과는 다른 개념, 페이지네이션 겹침·재실행
     등으로 정말 똑같은 기사가 두 번 들어온 경우만 거른다. 첫 번째로 본 URL을 유지.
+
+    그다음 scorer.is_stale()로 24시간(scorer.FRESHNESS_WINDOW_HOURS) 초과 기사를 걸러낸다.
+    naver/gdelt 각 collector가 "수집 시점 기준 24시간 이내"로 이미 걸렀는데도 이게 또
+    필요한 이유: 수집 이후 관련성 필터/그룹핑/스코어링까지 시간이 더 흐르면서(GDELT만 최대
+    220분) 수집 시점엔 24시간 안이었던 기사가 그사이 24시간을 넘길 수 있다 - 정규화 직후
+    (수집 바로 다음)로 최대한 앞당겨서 걸러야 이 드리프트를 최소화할 수 있다. 걸러진 기사는
+    이후 관련성 필터/그룹핑에도 안 들어가므로 불필요한 LLM 호출도 그만큼 줄어든다.
     """
     seen_urls: set[str] = set()
     deduped = []
@@ -131,7 +138,22 @@ def normalize(articles: list[dict]) -> list[dict]:
     if removed:
         print(f"[main] 완전 동일 기사(URL 중복) {removed}건 제거")
 
-    return deduped
+    fresh = []
+    stale_count = 0
+    for article in deduped:
+        try:
+            if scorer.is_stale(article["published_at"]):
+                stale_count += 1
+                continue
+        except (KeyError, ValueError, TypeError):
+            pass  # published_at 없음/형식 이상 - 판단 못 하니 안전하게 통과시킴(걸러내지 않음)
+        fresh.append(article)
+
+    if stale_count:
+        print(f"[main] 신선도(24시간 초과) 기준 {stale_count}건 제외 - "
+              f"수집 시점엔 기준 이내였는데 이후 단계 진행 중 시간이 흘러 넘긴 경우")
+
+    return fresh
 
 
 # ---------------------------------------------------------------------------
