@@ -17,7 +17,13 @@ import keyword_source
 # .env 파일이 있으면 환경변수로 등록 (없어도 에러 없음 - GitHub Actions는 Secrets가 이미 주입돼 있어 무시됨)
 load_dotenv()
 
-NAVER_API_URL = "https://openapi.naver.com/v1/search/news.json"
+# NAVER Developers Center의 기존 뉴스 검색 API가 NAVER API HUB(NCP API Gateway 기반)로
+# 이관됨(https://guide.ncloud-docs.com/docs/apihub-migration) - 호출 도메인/API Path/인증
+# 헤더명이 전부 바뀜(구: openapi.naver.com, X-Naver-Client-Id/-Secret). 신규 발급된
+# NAVER API HUB Application의 Client ID/Secret이 필요하다 - 기존 Developers Center
+# 인증정보는 이 API HUB 호출에 안 먹힘(NAVER_CLIENT_ID/NAVER_CLIENT_SECRET 환경변수/
+# GitHub Secrets 값을 신규 것으로 교체해야 함, 변수명 자체는 그대로 재사용).
+NAVER_API_URL = "https://naverapihub.apigw.ntruss.com/search/v1/news"
 
 # 매일 새벽 실행이므로 전날(최근 1일) 이내 기사만 남긴다.
 # (예전엔 주 1회 실행이라 7일이었음 - 일간 전환하면서 변경)
@@ -115,9 +121,11 @@ def search_naver_news(keyword: str, client_id: str, client_secret: str, start: i
     session을 안 넘기면 requests 모듈을 그대로 써서 매번 새 연결을 맺는다.
     (세션 재사용은 순전히 성능 최적화, 없어도 기능은 동일)
     """
+    # NAVER API HUB 인증 헤더명 (구 Developers Center의 X-Naver-Client-Id/-Secret에서 변경됨 -
+    # 위 NAVER_API_URL 옆 주석 참고)
     headers = {
-        "X-Naver-Client-Id": client_id,
-        "X-Naver-Client-Secret": client_secret,
+        "X-NCP-APIGW-API-KEY-ID": client_id,
+        "X-NCP-APIGW-API-KEY": client_secret,
     }
 
     params = {
