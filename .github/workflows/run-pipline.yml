@@ -130,13 +130,21 @@ jobs:
           KEYWORD_SHEET_CSV_URL: ${{ vars.KEYWORD_SHEET_CSV_URL }}
 
           # --- 3차 LLM 그룹핑 보조 (issue_grouper.py) ---
-          # 아래 세 값을 채우면 LLM_PROVIDER=openrouter로 3차를 실행할 수 있습니다.
+          # 아래 값들을 채우면 LLM_PROVIDER=openrouter로 3차를 실행할 수 있습니다.
+          # OPENROUTER_MODEL_2/3는 선택사항 - 1순위 모델이 실패했을 때 자동으로 시도되는
+          # 2/3순위 폴백 모델(issue_grouper.py/relevance_filter.py/llm_summarizer.py 공통
+          # 체인, 1순위->2순위->3순위->최종 안전망 순). 여기 env로 넘겨주지 않으면 리포
+          # Variables에 값을 등록해도 파이썬 프로세스 입장에선 아예 안 보여서(os.environ에
+          # 없는 값 취급), 1순위 실패 시 2/3순위를 건너뛰고 바로 최종 안전망(openrouter/free)
+          # 으로 넘어가버림 - 실제로 이 문제가 있었던 걸 확인해서 아래 두 줄을 추가함.
           #
           # 참고: OPENROUTER_MODEL을 리포 Variables에 등록 안 해도 이 줄 자체는 그대로 둬도 안전합니다
           # - GitHub가 미등록 vars를 빈 문자열로 넘기는 걸 issue_grouper.py가 감지해서 기본값(openrouter/free)으로 자연스럽게 대체하도록 수정함.
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+          OPENROUTER_MODEL_2: ${{ vars.OPENROUTER_MODEL_2 }}
+          OPENROUTER_MODEL_3: ${{ vars.OPENROUTER_MODEL_3 }}
           # 6단계(deploy.py) 이메일 발송용. SMTP_USER/SMTP_APP_PASSWORD는 민감정보라 Secrets로, EMAIL_RECIPIENTS는 수신자 목록이라 마찬가지로 Secrets에 등록.
           # (이메일 주소도 개인정보로 취급 - Variables는 리포 권한 있는 사람 누구나 값이 노출되니 이쪽이 더 안전).
           # 셋 다 미등록이어도 deploy.py가 안전하게 발송만 생략하므로 파이프라인 자체는 안 죽음.
