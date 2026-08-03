@@ -10,6 +10,7 @@ LLM_PROVIDER/모델명/API URL/X-Title 상수를 새로 정의하지 않고 issu
 API 키 없음/LLM 호출·응답 실패 시 요약을 생략하고 원문 제목만 노출하는 쪽으로 fallback한다.
 """
 
+import json
 import os
 import time
 
@@ -21,7 +22,11 @@ import issue_grouper as _ig  # LLM_PROVIDER, 모델명, API URL, X-Title 상수 
 
 
 _SYSTEM_PROMPT = (
-    "너는 AI·IT 뉴스 큐레이션 서비스의 요약 작성자다. 주어진 이슈(같은 사건을 다루는 기사 제목들과 참고 정보)를 보고 한국어로 2~3문장의 자체 요약을 작성하라. 원문을 그대로 옮기지 말고 핵심 내용만 새로 요약한다. 확실하지 않은 수치나 사실은 임의로 만들어내지 말고, 주어진 제목/참고 정보에 있는 내용만 사용한다. 확실하지 않으면 요약 대신 애매함을 그대로 표현하라. 전문용어·정부기관명·제도명 등 고유명사는 임의로 한글화하지 말고 영문 원어가 있으면 괄호로 병기한다. 다른 설명 없이 요약 문장만 출력한다."
+    "너는 AI·IT 뉴스 큐레이션 서비스의 요약 작성자다. 주어진 이슈(같은 사건을 다루는 기사 제목들과 참고 정보)를 보고 다음 두 가지를 작성하라. "
+    "(1) title: 이슈를 대표하는 한국어 제목. 원문 제목이 이미 한국어면 자연스럽게 다듬어 그대로 쓰고, 영어 등 외국어면 한국어로 번역한다 - 원문의 사실관계를 유지하고 과도하게 의역하지 않는다. "
+    "(2) summary: 한국어 2~3문장 자체 요약. 원문을 그대로 옮기지 말고 핵심 내용만 새로 요약한다. 확실하지 않은 수치나 사실은 임의로 만들어내지 말고, 주어진 제목/참고 정보에 있는 내용만 사용한다. 확실하지 않으면 요약 대신 애매함을 그대로 표현하라. "
+    "title/summary 둘 다 전문용어·정부기관명·제도명 등 고유명사는 임의로 한글화하지 말고 영문 원어가 있으면 괄호로 병기한다. "
+    "다른 설명이나 마크다운 코드펜스 없이, 반드시 다음 JSON 형식으로만 응답하라: {\"title\": \"...\", \"summary\": \"...\"}"
 )
 
 # 그룹 하나에 기사가 아주 많을 때 제목을 전부 프롬프트에 넣으면 비용/속도 낭비가 커서 상한을 둔다.
@@ -175,6 +180,36 @@ def _is_suspicious_summary(text: str) -> bool:
     return "user safety" in text.lower()
 
 
+def _parse_llm_response(text: str) -> dict | None:
+    """
+    _call_llm의 원본 응답 텍스트에서 {"title": ..., "summary": ...} JSON을 파싱한다.
+    issue_grouper.py의 JSON 파싱과 동일하게 코드펜스(```json ... ```)를 방어적으로 벗겨낸다
+    (무료 모델이 형식 지시를 안 지키고 마크다운으로 감싸 보낼 때가 있음).
+
+    실패(JSON이 아님/dict가 아님/summary 없음)하면 None - 호출부(summarize_issue)가 원본
+    텍스트를 그대로 요약으로 쓰는 예전 방식(자연어 응답)으로 폴백한다(제목 번역만 포기,
+    요약 자체는 최대한 살림).
+    """
+    cleaned = text
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("```")[1]
+        cleaned = cleaned[4:] if cleaned.startswith("json") else cleaned
+    try:
+        parsed = json.loads(cleaned.strip())
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    summary = parsed.get("summary")
+    if not isinstance(summary, str) or not summary.strip():
+        return None
+    title = parsed.get("title")
+    return {
+        "title": title.strip() if isinstance(title, str) and title.strip() else None,
+        "summary": summary.strip(),
+    }
+
+
 def _fetch_body_via_trafilatura(url: str) -> str | None:
     """
     URL에서 범용으로 본문 추출 시도. 사이트별 셀렉터가 없어 성공률은 들쭉날쭉.
@@ -203,6 +238,9 @@ def summarize_issue(item: dict, session: requests.Session | None = None) -> dict
     (summarize_top_issues처럼 여러 건을 처리할 때만 세션을 만들어 넘기면 재사용 이득이 있음)
 
     반환값에 추가되는 필드:
+      title_ko: LLM이 생성한 한국어 제목(원문이 이미 한국어면 그대로/다듬어서), 또는
+                None(요약 자체가 생략됐거나 응답 JSON 파싱에 실패한 경우 - 이 경우 호출부가
+                원문 제목(titles[0])을 그대로 표시에 쓴다)
       summary: LLM이 생성한 2~3문장 요약, 또는 None(생략된 경우)
       summary_skipped_reason: 생략 이유. 정상 요약됐으면 None.
     """
@@ -234,9 +272,11 @@ def summarize_issue(item: dict, session: requests.Session | None = None) -> dict
 
         if not has_substantial_material:
             result["summary"] = None
+            result["title_ko"] = None
             result["summary_skipped_reason"] = (
                 "단독 기사(이슈 그룹핑 안 됨) - 본문/설명 재료가 얇아 요약 생략, "
-                "원문 제목만 노출 (범용 본문 추가 수집도 실패/미시도)"
+                "원문 제목만 노출 (범용 본문 추가 수집도 실패/미시도 - 제목 번역도 이 경로에선 "
+                "같이 생략됨)"
             )
             return result
         # 재료가 충분하면 단독 기사여도 아래 정상 요약 경로로 진행
@@ -245,6 +285,7 @@ def summarize_issue(item: dict, session: requests.Session | None = None) -> dict
     api_key = os.environ.get(key_env_var)
     if not api_key:
         result["summary"] = None
+        result["title_ko"] = None
         result["summary_skipped_reason"] = (
             f"{key_env_var} 없음(LLM_PROVIDER={_ig.LLM_PROVIDER}) - 요약 생략, 원문 제목만 노출"
         )
@@ -252,18 +293,30 @@ def summarize_issue(item: dict, session: requests.Session | None = None) -> dict
 
     user_prompt = _build_user_prompt(item_for_prompt)
     if session is not None:
-        summary_text = _call_llm(_SYSTEM_PROMPT, user_prompt, api_key, session)
+        raw_response = _call_llm(_SYSTEM_PROMPT, user_prompt, api_key, session)
     else:
         with requests.Session() as temp_session:
-            summary_text = _call_llm(_SYSTEM_PROMPT, user_prompt, api_key, temp_session)
+            raw_response = _call_llm(_SYSTEM_PROMPT, user_prompt, api_key, temp_session)
 
-    if not summary_text:
+    if not raw_response:
         result["summary"] = None
+        result["title_ko"] = None
         result["summary_skipped_reason"] = "LLM 호출/응답 실패 - 요약 생략, 원문 제목만 노출"
         return result
 
+    parsed = _parse_llm_response(raw_response)
+    if parsed is None:
+        # JSON 파싱 실패(무료 모델이 형식 지시를 안 지킨 경우) - 완전히 버리지 않고 응답
+        # 텍스트 자체를 예전처럼 "자연어 요약"으로 취급해 최대한 살린다. 제목 번역만 포기.
+        summary_text = raw_response
+        title_ko = None
+    else:
+        summary_text = parsed["summary"]
+        title_ko = parsed["title"]
+
     if _is_suspicious_summary(summary_text):
         result["summary"] = None
+        result["title_ko"] = None
         result["summary_skipped_reason"] = (
             "LLM 응답이 요약이 아닌 것으로 추정됨(안전성 필터 오작동 등, 원인 미확인) - "
             "본문 요약 생성 실패, 원문 제목만 노출"
@@ -271,6 +324,7 @@ def summarize_issue(item: dict, session: requests.Session | None = None) -> dict
         return result
 
     result["summary"] = summary_text
+    result["title_ko"] = title_ko
     result["summary_skipped_reason"] = None
     return result
 

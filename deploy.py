@@ -71,6 +71,8 @@ def _format_issue_html(item: dict, rank: int | None = None, accent: str = DOMEST
     """
     titles = item.get("titles", [])
     rep_title = titles[0] if titles else "(제목 없음)"
+    title_ko = item.get("title_ko")
+    display_title = title_ko or rep_title
     rank_html = ""
     if rank is not None:
         rank_html = (
@@ -78,6 +80,12 @@ def _format_issue_html(item: dict, rank: int | None = None, accent: str = DOMEST
             f'text-align:center; border-radius:50%; background:{accent}; color:#fff; font-size:11px; '
             f'font-weight:bold; margin-right:6px;">{rank}</span>'
         )
+
+    orig_title_html = ""
+    if title_ko and title_ko != rep_title:
+        # 번역된 경우 원문도 작게 남겨둠 - 검색/원문 대조용(예: 해외 기사 원제)
+        orig_title_html = (f'<p style="margin:2px 0 4px 0; font-size:11px; color:#aaa; '
+                           f'font-style:italic;">원문: {_escape(rep_title)}</p>')
 
     extra_html = ""
     if len(titles) > 1:
@@ -106,7 +114,8 @@ def _format_issue_html(item: dict, rank: int | None = None, accent: str = DOMEST
 
     return f"""
     <div style="margin-bottom:12px; padding:12px 14px; border:1px solid #eee; border-radius:8px; background:#fff;">
-      <p style="margin:0; font-weight:bold; font-size:14px; color:#111;">{rank_html}{_escape(rep_title)}</p>
+      <p style="margin:0; font-weight:bold; font-size:14px; color:#111;">{rank_html}{_escape(display_title)}</p>
+      {orig_title_html}
       {extra_html}
       {cross_html}
       {body_html}

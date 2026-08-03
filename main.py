@@ -160,6 +160,38 @@ def normalize(articles: list[dict]) -> list[dict]:
 # 3) 스코어링 - scorer.py 그대로 사용
 # ---------------------------------------------------------------------------
 
+def _collect_shown_titles(ranked: list[dict], category_ranked: dict[str, list[dict]]) -> set[str]:
+    """
+    축 하나(국내 또는 해외)에서 이메일/summary.md에 실제로 노출되는 모든 제목의 집합.
+    메인 Top N + 카테고리별 Top N 전부를 합치고, 각 이슈의 titles 전체(그룹 내 대표
+    제목 하나만이 아니라 그룹에 묶인 기사 전체 제목)를 포함한다 - 4차 사후 재검토에서
+    그룹이 병합되면 대표 제목이 바뀔 수 있어서, 전체를 봐야 cross_axis_partner 매칭이
+    안 깨진다(score()의 _scrub_unshown_cross_axis_partner 참고).
+    """
+    titles: set[str] = set()
+    for item in ranked:
+        titles.update(item.get("titles", []))
+    for items in category_ranked.values():
+        for item in items:
+            titles.update(item.get("titles", []))
+    return titles
+
+
+def _scrub_unshown_cross_axis_partner(items: list[dict], other_axis_shown_titles: set[str]) -> None:
+    """
+    cross_axis_partner가 가리키는 제목이 반대 축의 실제 노출 목록(other_axis_shown_titles)에
+    없으면 지운다(제자리 수정). score() 안에서 cross_axis_partner는 이슈 그룹 형성 시점 -
+    아직 어느 쪽 Top N에 들지 안 들지 모르는 시점 - 에 일단 붙여두는데, 국내/해외 두 축이
+    완전히 독립적으로 순위를 매기다 보니 한쪽엔 들고 반대쪽엔 못 드는 경우가 흔하다.
+    그대로 두면 "🔗 반대 축에서도 다뤄짐"이 이메일 어디에도 실제로 안 나오는 기사 제목을
+    가리키게 되므로, 최종 노출 목록이 확정된 뒤 이 함수로 마지막에 걸러낸다.
+    """
+    for item in items:
+        partner = item.get("cross_axis_partner")
+        if partner and partner not in other_axis_shown_titles:
+            item["cross_axis_partner"] = None
+
+
 def score(articles: list[dict], model, top_n: int = TOP_N,
           grouping_deadline: float | None = None,
           stage4_deadline: float | None = None) -> tuple[list[dict], list[dict], dict, dict]:
@@ -175,6 +207,9 @@ def score(articles: list[dict], model, top_n: int = TOP_N,
     한 그룹이 국내·해외 기사를 동시에 포함할 수 있다. 각 축엔 그 축 기사만 걸러서 넘겨(각 축의
     issue_score가 그 축 원본 신호만 반영하게) 종합 랭킹은 만들지 않고, 대신 양쪽 다 있을 때만
     서로의 대표 기사에 "_cross_axis_partner"를 붙여 scorer.score_group()이 정식 필드로 승격한다.
+    이 시점(그룹 형성 시점)엔 아직 어느 쪽이 Top N에 들지 모르므로 일단 붙여두고, 함수 끝에서
+    최종 노출 목록이 확정된 뒤 반대 축에 실제로 없는 건 지운다(_scrub_unshown_cross_axis_partner
+    참고) - 안 그러면 이메일에 없는 기사 제목이 "🔗 반대 축에서도 다뤄짐"으로 걸려있게 된다.
 
     ** GDELT 한국어 기사는 국내로 재분류 **
     GDELT가 번역 인덱싱으로 한국어 기사를 물어오는 경우가 있어 소스만으로 판단하면 오분류된다.
@@ -242,6 +277,24 @@ def score(articles: list[dict], model, top_n: int = TOP_N,
         domestic_groups, CATEGORY_TOP_N, dedupe_fn=_category_dedupe_fn("국내"))
     international_category_ranked = scorer.score_by_category(
         international_groups, CATEGORY_TOP_N, dedupe_fn=_category_dedupe_fn("해외"))
+
+    # cross_axis_partner는 위에서 "그룹 형성 시점"에 붙였는데, 그건 아직 Top N 선정
+    # *이전*이라 그 그룹이 실제로 반대 축 Top N(메인 또는 카테고리별)에 들지 안 들지
+    # 모르는 상태에서 일단 붙인 것이다 - 국내/해외 두 축이 완전히 독립적으로 순위를 매기므로
+    # 한쪽엔 들고 한쪽엔 못 드는 경우가 흔하다. 그 상태로 그냥 두면 "🔗 반대 축에서도
+    # 다뤄짐"이 실제로는 이메일/summary.md 어디에도 안 나오는 기사 제목을 가리키게 된다.
+    # 그래서 여기서 양쪽 축의 최종 노출 제목(메인 Top N + 카테고리별 Top N 전부, 그룹 내
+    # titles 전체 - 대표 제목 하나만이 아니라 다 포함해야 4차 병합으로 대표가 바뀌어도
+    # 매칭이 안 깨짐) 집합을 만들어두고, 상대측 집합에 없는 cross_axis_partner는 지운다.
+    domestic_shown_titles = _collect_shown_titles(domestic_ranked, domestic_category_ranked)
+    international_shown_titles = _collect_shown_titles(international_ranked, international_category_ranked)
+
+    _scrub_unshown_cross_axis_partner(domestic_ranked, international_shown_titles)
+    _scrub_unshown_cross_axis_partner(international_ranked, domestic_shown_titles)
+    for items in domestic_category_ranked.values():
+        _scrub_unshown_cross_axis_partner(items, international_shown_titles)
+    for items in international_category_ranked.values():
+        _scrub_unshown_cross_axis_partner(items, domestic_shown_titles)
 
     return domestic_ranked, international_ranked, domestic_category_ranked, international_category_ranked
 

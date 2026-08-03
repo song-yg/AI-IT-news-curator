@@ -135,11 +135,16 @@ def _format_issue_section(item: dict) -> str:
     """summary.md의 이슈 하나 분량 마크다운 블록."""
     titles = item.get("titles", [])
     rep_title = titles[0] if titles else "(제목 없음)"
-    lines = [
-        f"### {rep_title}",
+    title_ko = item.get("title_ko")
+    display_title = title_ko or rep_title
+    lines = [f"### {display_title}"]
+    if title_ko and title_ko != rep_title:
+        # 번역된 경우 원문도 작게 남겨둠 - 검색/원문 대조용(예: 해외 기사 원제)
+        lines.append(f"*원문: {rep_title}*")
+    lines.append(
         f"- 언급 {item.get('mention_count', 0)}건"
-        + (f" (그룹 내 추가 {len(titles) - 1}건 생략)" if len(titles) > 1 else ""),
-    ]
+        + (f" (그룹 내 추가 {len(titles) - 1}건 생략)" if len(titles) > 1 else "")
+    )
     if item.get("cross_axis_partner"):
         lines.append(f"- 🔗 반대 축에서도 다뤄짐: {item['cross_axis_partner']}")
     if item.get("summary"):
