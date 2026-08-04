@@ -14,8 +14,8 @@ relevance_filter.py
 이 필터는 "애매하면 true(통과)"가 안전 - 관련 기사를 잘못 거르는 것보다 무관한 기사가
 몇 개 더 통과하는 편이 손실이 적음. 배치 호출 자체가 실패해도 그 배치는 전부 통과시킴.
 
-소스별로 LLM에 줄 수 있는 컨텍스트 양이 다름 - 네이버는 description, WATT는 body, GDELT는
-제목뿐(본문을 안 줌) - GDELT는 상대적으로 판정 근거가 부족함.
+소스별로 LLM에 줄 수 있는 컨텍스트 양이 다름 - 네이버는 description, GDELT는 제목뿐(본문을
+안 줌) - GDELT는 상대적으로 판정 근거가 부족함.
 """
 
 import json
@@ -164,8 +164,9 @@ _SYSTEM_PROMPT = (
 
 def _snippet(article: dict) -> str | None:
     """
-    판정 근거 스니펫 추출. 네이버는 description, WATT는 body, GDELT는 본문이 아예 없어
-    None 반환 - 프롬프트에 "요약 없음"으로 명시해 모델이 없는 정보를 지어내지 않게 함.
+    판정 근거 스니펫 추출. 네이버는 description, GDELT는 본문이 아예 없어(article dict의
+    body 필드가 이 프로젝트에서는 항상 None) None 반환 - 프롬프트에 "요약 없음"으로 명시해
+    모델이 없는 정보를 지어내지 않게 함.
     """
     text = article.get("description") or article.get("body")
     if not text:
@@ -314,15 +315,20 @@ def filter_articles(articles: list[dict], deadline: float | None = None) -> list
     정규화+태깅이 끝난 articles를 받아 LLM이 "관련 없다"고 확실히 판단한 것만 걸러낸다.
     API 키 없음/모든 배치 실패 시 원본 그대로 반환 (필터 안 거친 것과 동일한 안전한 기본값).
 
-    deadline: time.monotonic() 기준 절대 마감 시각. main.py가 파이프라인 전역 공유 예산에서
-    계산해 넘겨준다 - 안 넘겨받으면(예: 이 모듈만 따로 테스트) 이 모듈 자체 기본값
-    (TIME_BUDGET_SECONDS)으로 지금 시각 기준 마감을 계산한다.
+    ** 지금은 파이프라인 본선에서 안 쓰임(legacy) ** - 그룹핑을 관련성 필터보다 먼저
+    실행하는 순서로 바뀌면서 main.py/process_stage.py는 이제 filter_groups()(그룹 단위,
+    아래)를 쓴다. 이 함수는 그룹핑 없이 기사 단위로만 테스트하고 싶을 때 쓸 수 있어 남겨둠.
 
-    ** WATT 소스는 LLM 호출 없이 자동 통과 **
-    WATT는 그 자체가 전문지라 이 필터가 잡으려는 오매칭 유형(동음이의어 등)이 구조적으로 해당 안 됨.
-      - LLM 호출 없이 통과시켜 호출 수 절감.
-      - keyword_tagger.py의 site_category 판단 조건(source not in ("네이버", "GDELT"))과 동일 조건 재사용.
-      - 같은 취약점도 그대로 적용됨(새 소스 추가 시 "WATT 취급"돼 자동 통과될 위험, 현재 계획 없어 그대로 둠).
+    deadline: time.monotonic() 기준 절대 마감 시각. 안 넘겨받으면(예: 이 모듈만 따로 테스트)
+    이 모듈 자체 기본값(TIME_BUDGET_SECONDS)으로 지금 시각 기준 마감을 계산한다.
+
+    ** 소스가 네이버/GDELT가 아니면 LLM 호출 없이 자동 통과 **
+    이 프로젝트는 실제로는 네이버/GDELT 두 소스뿐이라 지금은 해당 사항이 없지만(코드상
+    watt_articles는 항상 빈 리스트), 업계 전문지처럼 이 필터가 잡으려는 오매칭 유형(동음
+    이의어 등)이 구조적으로 해당 안 되는 소스가 나중에 추가될 경우를 대비해 조건 자체는
+    남겨둠 - keyword_tagger.py의 site_category 판단 조건(source not in ("네이버", "GDELT"))과
+    동일 조건 재사용. 같은 취약점도 그대로 적용됨(그런 소스가 추가되면 검증 없이 자동
+    통과될 위험 - 지금은 실제로 그런 소스가 없어 무해함).
     자동 통과 기사가 반환 리스트 앞쪽에 모여 원래 수집 순서는 보존되지 않음 - 이후 단계는 순서 비의존이라 문제 없음.
     """
     if not articles:
@@ -332,8 +338,7 @@ def filter_articles(articles: list[dict], deadline: float | None = None) -> list
     llm_target_articles = [a for a in articles if a.get("source") in ("네이버", "GDELT")]
 
     if watt_articles:
-        print(f"[relevance_filter] WATT 소스 {len(watt_articles)}건은 업계 전문지 특성상 "
-              f"LLM 호출 없이 자동 통과")
+        print(f"[relevance_filter] 네이버/GDELT 외 소스 {len(watt_articles)}건은 LLM 호출 없이 자동 통과")
 
     if not llm_target_articles:
         return watt_articles
@@ -348,7 +353,7 @@ def filter_articles(articles: list[dict], deadline: float | None = None) -> list
     model_desc = " -> ".join(LLM_MODEL_CHAIN_OPENROUTER) if LLM_PROVIDER == "openrouter" else "Anthropic Claude"
     print(f"[relevance_filter] 관련성 필터 시작 - provider={LLM_PROVIDER}, "
           f"model={model_desc}, 대상 {len(llm_target_articles)}건(네이버/GDELT만, "
-          f"WATT {len(watt_articles)}건 제외)")
+          f"그 외 소스 {len(watt_articles)}건 제외)")
 
     kept = list(watt_articles)
     dropped_samples = []
@@ -382,7 +387,7 @@ def filter_articles(articles: list[dict], deadline: float | None = None) -> list
                     dropped_samples.append(article.get("title", ""))
 
     dropped_count = len(articles) - len(kept)
-    print(f"[relevance_filter] 관련성 필터 완료 - 전체 {len(articles)}건(WATT 자동통과 "
+    print(f"[relevance_filter] 관련성 필터 완료 - 전체 {len(articles)}건(그 외 소스 자동통과 "
           f"{len(watt_articles)}건 포함) 중 {dropped_count}건 제외, {len(kept)}건 유지"
           + (f" (시간 예산 소진으로 {skipped_count}건 미검증 통과 포함)" if skipped_count else ""))
     if dropped_samples:
@@ -554,3 +559,138 @@ def recategorize_uncategorized(articles: list[dict], deadline: float | None = No
           + (f" (그중 {skipped_count}건은 시간 예산 소진으로 미시도)" if skipped_count else ""))
 
     return articles
+
+
+# ---------------------------------------------------------------------------
+# 그룹 단위 관련성 필터 / 카테고리 재분류
+# ---------------------------------------------------------------------------
+#
+# 그룹핑을 관련성 필터보다 먼저 실행하도록 순서를 바꾸면서(main.py/process_stage.py 참고)
+# 새로 생겼다 - 이슈 그룹 하나(같은 사건을 다루는 기사 묶음)는 대표 기사 1건(그룹의 index 0,
+# issue_grouper._sort_group_by_representative가 "판단 근거 텍스트가 가장 긴" 기사를 대표로
+# 정렬해둠) 판정으로 그룹 전체의 관련성/카테고리를 결정한다 - 같은 사건 기사들을 굳이
+# 하나씩 따로 LLM에 물어볼 필요가 없다는 판단(호출 수 절감 + 같은 이슈인데 판정이 갈리는
+# 불일치 방지). filter_articles/recategorize_uncategorized(위, 기사 단위)는 이제 파이프라인
+# 본선에서는 안 쓰이지만, 그룹핑 없이 기사 단위로만 테스트하고 싶을 때 여전히 쓸 수 있어 남겨둠.
+
+
+def filter_groups(groups: list[list[dict]], deadline: float | None = None) -> list[list[dict]]:
+    """
+    이슈 그룹 리스트 중 대표 기사(각 그룹의 index 0)가 "관련 없다"고 확정된 그룹만 통째로
+    제외한다. API 키 없거나 전부 실패하면 원본 그대로 반환(안전 기본값) - filter_articles와
+    동일한 방향.
+
+    deadline: time.monotonic() 기준 절대 마감 시각. main.py/process_stage.py가 계산해
+    넘겨준다 - 안 넘겨받으면(예: 이 모듈만 따로 테스트) 예산 체크 자체를 안 함(무제한).
+    """
+    if not groups:
+        return groups
+
+    key_env_var = "OPENROUTER_API_KEY" if LLM_PROVIDER == "openrouter" else "ANTHROPIC_API_KEY"
+    api_key = os.environ.get(key_env_var)
+    if not api_key:
+        print(f"[relevance_filter] 🔴 조치필요 [RF-11] - {key_env_var} 없음(LLM_PROVIDER={LLM_PROVIDER}) - "
+              f"관련성 필터 생략, {len(groups)}개 그룹 전부 통과")
+        return groups
+
+    model_desc = " -> ".join(LLM_MODEL_CHAIN_OPENROUTER) if LLM_PROVIDER == "openrouter" else "Anthropic Claude"
+    print(f"[relevance_filter] 관련성 필터(그룹 단위) 시작 - provider={LLM_PROVIDER}, "
+          f"model={model_desc}, 대상 {len(groups)}개 그룹(대표 기사 1건씩)")
+
+    kept = []
+    dropped_samples = []
+    total_batches = (len(groups) + BATCH_SIZE - 1) // BATCH_SIZE
+    with requests.Session() as session:
+        for batch_num, i in enumerate(range(0, len(groups), BATCH_SIZE), start=1):
+            if deadline is not None and time.monotonic() >= deadline:
+                remaining = groups[i:]
+                kept.extend(remaining)
+                print(f"[relevance_filter] 🟡 주의 - 관련성 필터(그룹 단위) 시간 예산 소진(전역 파이프라인 "
+                      f"마감 도달) - 남은 {len(remaining)}개 그룹은 필터링 없이 전부 통과 처리")
+                break
+
+            batch_groups = groups[i:i + BATCH_SIZE]
+            batch_representatives = [g[0] for g in batch_groups]
+            print(f"[relevance_filter] 그룹 배치 {batch_num}/{total_batches} 처리 중 ({len(batch_groups)}개 그룹)")
+            results = _call_llm(batch_representatives, api_key, session)
+            if results is None:
+                kept.extend(batch_groups)  # 이 배치는 전부 통과 (안전한 기본값)
+                continue
+            for group, relevant in zip(batch_groups, results):
+                if relevant:
+                    kept.append(group)
+                else:
+                    dropped_samples.append(group[0].get("title", ""))
+
+    dropped_count = len(groups) - len(kept)
+    print(f"[relevance_filter] 관련성 필터(그룹 단위) 완료 - 전체 {len(groups)}개 그룹 중 "
+          f"{dropped_count}개 제외, {len(kept)}개 유지")
+    if dropped_samples:
+        sample_n = min(10, len(dropped_samples))
+        print(f"[relevance_filter] 제외된 그룹 대표 제목 샘플 (최대 {sample_n}건):")
+        for title in dropped_samples[:sample_n]:
+            print(f"   - {title}")
+
+    return kept
+
+
+def recategorize_uncategorized_groups(groups: list[list[dict]], deadline: float | None = None) -> list[list[dict]]:
+    """
+    filter_groups() 통과했지만 대표 기사(index 0) category가 "기타"인 그룹만 골라 대표 기사로
+    LLM 재분류한다. 재분류되면(기타가 아닌 카테고리로 확정되면) 그 그룹 안에서 category가
+    "기타"인 멤버 전원에게 같은 카테고리를 적용한다 - 이미 사전 매칭으로 다른 카테고리가
+    붙은 멤버는 그 신호를 존중해 안 건드림. API 키 없거나 전부 실패해도 원본 그대로 반환.
+
+    deadline: time.monotonic() 기준 절대 마감 시각. main.py/process_stage.py가 계산해
+    넘겨준다 - 안 넘겨받으면(예: 이 모듈만 따로 테스트) 예산 체크 자체를 안 함(무제한).
+    """
+    targets = [g for g in groups if g[0].get("category") == "기타"]
+    if not targets:
+        return groups
+
+    key_env_var = "OPENROUTER_API_KEY" if LLM_PROVIDER == "openrouter" else "ANTHROPIC_API_KEY"
+    api_key = os.environ.get(key_env_var)
+    if not api_key:
+        print(f"[relevance_filter] 🔴 조치필요 [RF-12] - {key_env_var} 없음(LLM_PROVIDER={LLM_PROVIDER}) - "
+              f"카테고리 재분류 생략, {len(targets)}개 그룹 '기타' 그대로 유지")
+        return groups
+
+    import keyword_tagger
+    category_choices = list(keyword_tagger.CATEGORY_KEYWORDS.keys())
+    category_list_text = "\n".join(f"- {c}" for c in category_choices)
+    system_prompt = CATEGORY_RECLASSIFY_SYSTEM_PROMPT_TEMPLATE.format(category_list=category_list_text)
+
+    model_desc = " -> ".join(LLM_MODEL_CHAIN_OPENROUTER) if LLM_PROVIDER == "openrouter" else "Anthropic Claude"
+    print(f"[relevance_filter] 카테고리 재분류(그룹 단위) 시작 - provider={LLM_PROVIDER}, "
+          f"model={model_desc}, 대상 {len(targets)}개 그룹(대표 기사가 '기타')")
+
+    reclassified_count = 0
+    skipped_count = 0
+    total_batches = (len(targets) + BATCH_SIZE - 1) // BATCH_SIZE
+    with requests.Session() as session:
+        for batch_num, i in enumerate(range(0, len(targets), BATCH_SIZE), start=1):
+            if deadline is not None and time.monotonic() >= deadline:
+                skipped_count = len(targets) - i
+                print(f"[relevance_filter] 🟡 주의 - 카테고리 재분류(그룹 단위) 시간 예산 소진(전역 파이프라인 "
+                      f"마감 도달) - 남은 {skipped_count}개 그룹은 재분류 없이 '기타' 유지")
+                break
+
+            batch_groups = targets[i:i + BATCH_SIZE]
+            batch_representatives = [g[0] for g in batch_groups]
+            print(f"[relevance_filter] 카테고리 재분류(그룹) 배치 {batch_num}/{total_batches} "
+                  f"처리 중 ({len(batch_groups)}개 그룹)")
+            results = _call_category_llm(batch_representatives, api_key, session, category_choices, system_prompt)
+            if results is None:
+                continue  # 이 배치는 전부 '기타' 유지 (원본 이미 '기타'라 손댈 것 없음)
+            for group, new_category in zip(batch_groups, results):
+                if new_category != "기타":
+                    for article in group:
+                        if article.get("category") == "기타":
+                            article["category"] = new_category
+                    reclassified_count += 1
+
+    print(f"[relevance_filter] 카테고리 재분류(그룹 단위) 완료 - {len(targets)}개 그룹 중 "
+          f"{reclassified_count}개 재분류됨, {len(targets) - reclassified_count}개 '기타' 유지"
+          + (f" (그중 {skipped_count}개는 시간 예산 소진으로 미시도)" if skipped_count else ""))
+
+    return groups

@@ -5,8 +5,9 @@ AI·IT 뉴스 큐레이션 시스템의 오케스트레이션 레이어.
 6단계 파이프라인:
   1) 수집        -> naver/gdelt collector 순차 실행
   2) 정규화      -> 공통 스키마 통합 + URL 중복 제거 + 키워드 태깅(keyword_tagger) +
-                    관련성 필터(relevance_filter) + 카테고리 재분류 + 이슈 그룹핑(issue_grouper -
-                    1차 사전 매칭 + 2차 BGE-M3 임베딩 + 3차 LLM 보조)
+                    이슈 그룹핑(issue_grouper - 1차 사전 매칭 + 2차 BGE-M3 임베딩 + 3차
+                    LLM 보조) + 관련성 필터(relevance_filter, 그룹 대표 1건씩 판단) +
+                    카테고리 재분류(그룹 대표 1건씩 판단)
   3) 스코어링    -> scorer.py가 이슈 단위 점수 계산 + 국내-해외 교차 매칭(🔗) +
                     카테고리 전체 집계(category_aggregator, 전일/7일 평균 대비 증감 포함)
   4) LLM 요약    -> llm_summarizer.py: (A) 자체 요약 + (A-1) 얇은 재료 fallback.
@@ -16,6 +17,14 @@ AI·IT 뉴스 큐레이션 시스템의 오케스트레이션 레이어.
                     git 커밋/푸시는 워크플로(run-pipline.yml) 책임.
   6) 배포        -> deploy.py - Gmail SMTP로 국내/해외 Top N + 카테고리별 Top N을 HTML
                     이메일 발송. 인증정보 미설정 시 발송만 안전하게 생략.
+
+** 그룹핑을 관련성 필터보다 먼저 실행 **
+예전엔 "관련성 필터 -> 카테고리 재분류 -> 그룹핑" 순서로, 관련성 필터가 기사 하나하나를
+전부 개별 판단했다. 지금은 그룹핑을 먼저 끝내고, 관련성 필터/카테고리 재분류는 각 그룹의
+대표 기사(issue_grouper._sort_group_by_representative가 판단 근거 텍스트가 가장 긴 기사를
+대표로 정렬해둠) 1건만 LLM에 물어서 그룹 전체에 판정을 적용한다 - 같은 사건을 다루는
+기사들을 굳이 하나씩 따로 물어볼 필요가 없다는 판단(호출 수 절감 + 같은 이슈인데 판정이
+갈리는 불일치 방지). run_process()(아래)가 이 순서를 담당.
 """
 
 import os
@@ -67,30 +76,19 @@ def _compute_collection_window(reference: datetime | None = None) -> tuple[datet
 TOP_N = int(os.environ.get("TOP_N") or 5)
 CATEGORY_TOP_N = int(os.environ.get("CATEGORY_TOP_N") or 1)
 
-# --- 파이프라인 전역 시간예산: 단계별 체크포인트 ---
+# --- [2] 정규화 단계의 시간예산 ---
 #
-# GDELT 수집(gdelt_collector), 관련성 필터/카테고리 재분류(relevance_filter), 이슈 그룹핑
-# 1~3차(issue_grouper.group_issues), 4차 Top N 사후 재검토(issue_grouper.stage4_dedupe_and_promote),
-# LLM 요약(llm_summarizer, 국내/해외+카테고리별) 다섯 구간이 파이프라인 시작(0분)부터 이 누적
-# 체크포인트(분)까지 끝나야 한다. 앞 구간이 일찍 끝나면 그만큼이 자동으로 뒤 구간에 남고,
-# 늦게 끝나면 뒤 구간이 실제로 쓸 수 있는 시간이 그만큼 줄어든다(각 단계는 "이 구간에 배정된
-# 시간"이 아니라 "이 구간이 끝나야 하는 절대 시각"만 알면 됨 - main.py가 그 시각을 계산해서
-# 넘겨준다).
-#
-# 4차 재검토/LLM 요약은 이전엔 시간예산 자체가 없었는데(TOP_N이 고정값이라 상대적으로 안전하다고
-# 봤음) 이번에 추가함 - issue_grouper.stage4_dedupe_and_promote / llm_summarizer.summarize_top_issues
-# 둘 다 deadline 인자를 받도록 되어 있음.
-_CHECKPOINT_GDELT_MIN = 220        # GDELT 수집 종료
-_CHECKPOINT_RELEVANCE_MIN = 270    # + 관련성 필터/카테고리 재분류 (220 + 50)
-_CHECKPOINT_GROUPING_MIN = 305     # + 이슈 그룹핑 1~3차 (270 + 35)
-_CHECKPOINT_STAGE4_MIN = 310       # + 4차 Top N 사후 재검토 (305 + 5)
-_CHECKPOINT_SUMMARY_MIN = 355      # + LLM 요약 (310 + 45) - 파이프라인 전체 예산
-
-# GitHub Actions 잡 하드 캡 360분 대비 여유가 5분뿐이라, 이 예산 추적 범위 밖에 있는 단계들
-# (체크아웃/디스크 정리/Python·의존성 설치/BGE-M3 캐시/네이버 수집 - 위 구간 시작 *전*,
-# 저장/배포/git 커밋·푸시 - 위 구간 종료 *후*)이 5분 안에 끝나야 함. 로컬 체감상 여유가 있는
-# 값들이지만, 빠듯한 편이라는 점은 감안할 것 - 필요하면 위 체크포인트를 낮춰서 버퍼를 늘릴 수 있음.
-PIPELINE_TIME_BUDGET_SECONDS = _CHECKPOINT_SUMMARY_MIN * 60  # 355분(5시간 55분) - 참고용 총합
+# 관련성 필터/카테고리 재분류는 그룹 대표 1건만 판단하지만, 그룹 수 자체가 수집량(최대
+# 어제 하루치 전체)에 비례해서 늘 수 있어 예산을 둔다 - 각각 이 예산 계산의 기준 시각
+# (run_process 호출부가 process_start로 넘겨줌: run()은 파이프라인 시작 시각, Job
+# 체이닝의 process_stage.py는 그 Job 시작 시각)부터 절대 마감까지.
+# 이슈 그룹핑(1~3차)/4차 Top N 사후 재검토/LLM 요약은 시간예산 없음(무제한) - TOP_N이
+# 고정값이라 수집량과 무관하게 규모가 안 커지는 단계들이라 상대적으로 안전하다고 판단.
+# run_process()에서 이 셋에는 deadline=float("inf")를 넘긴다(각 함수의 "deadline 없으면
+# 자기 모듈 기본값으로 폴백"하는 동작을 피하기 위함 - None을 넘기면 그 폴백이 발동해
+# 버려서 결과적으로 예산이 생겨버림).
+RELEVANCE_TIME_BUDGET_SECONDS = 4 * 60 * 60             # 240분(4시간) - 관련성 필터
+CATEGORY_RECLASSIFY_TIME_BUDGET_SECONDS = 5 * 60 * 60   # 300분(5시간) - 카테고리 재분류
 
 
 
@@ -223,16 +221,17 @@ def _scrub_unshown_cross_axis_partner(items: list[dict], other_axis_shown_titles
             item["cross_axis_partner"] = None
 
 
-def score(articles: list[dict], model, top_n: int = TOP_N,
-          grouping_deadline: float | None = None,
+def score(groups: list[list[dict]], top_n: int = TOP_N,
           stage4_deadline: float | None = None) -> tuple[list[dict], list[dict], dict, dict]:
     """
-    이슈 그룹핑(issue_grouper.group_issues) + 국내/해외 개별 랭킹(Top N) 수행.
+    이미 그룹핑된 groups(issue_grouper.group_issues 결과)를 국내/해외로 나눠
+    Top N + 카테고리별 Top N을 계산한다.
 
-    ** 그룹핑을 먼저, 축 분리는 그 다음 **
-    이슈 매칭은 전체 기사(국내-국내/해외-해외/국내-해외 전부) 대상이어야 국내-해외 교차 매칭이
-    가능하다. 먼저 축을 나누면 교차 매칭이 구조적으로 불가능해지므로, 전체 기사로 group_issues()를
-    한 번 호출한 뒤 그 결과를 국내/해외로 나눠서 scorer에 넘긴다.
+    ** 그룹핑은 이 함수 밖(run()/process_stage.py)에서 미리 끝나 있어야 함 **
+    예전엔 이 함수 안에서 issue_grouper.group_issues()를 직접 호출했는데, 관련성 필터를
+    "그룹 대표 1건만 판단"하는 방식으로 바꾸면서 그룹핑 자체가 관련성 필터보다 먼저
+    실행돼야 하는 순서가 됐다 - 그래서 그룹핑은 run()이 이 함수 호출 전에 끝내고, 여기서는
+    이미 필터링/재분류까지 끝난 groups만 받아 국내/해외 분리·랭킹만 담당한다.
 
     ** 국내-해외 교차 매칭 그룹 처리 **
     한 그룹이 국내·해외 기사를 동시에 포함할 수 있다. 각 축엔 그 축 기사만 걸러서 넘겨(각 축의
@@ -247,13 +246,7 @@ def score(articles: list[dict], model, top_n: int = TOP_N,
     scorer._is_korean_gdelt_article()로 재분류 (category_aggregator도 같은 로직 공유 -
     Top N 스코어링과 카테고리 집계의 국내/해외 기준이 어긋나지 않게 함).
 
-    model: SentenceTransformer 인스턴스 또는 None (None이면 issue_grouper가 1차 결과만으로 fallback).
-
-    grouping_deadline: 파이프라인 전역 공유 예산에서 이 단계(그룹핑 1~3차) 몫의 절대 마감 시각.
-    issue_grouper.group_issues()(그 안의 3차 LLM 보조)에 그대로 전달한다.
-
-    stage4_deadline: 파이프라인 전역 공유 예산에서 4차 Top N 사후 재검토 몫의 절대 마감 시각.
-    grouping_deadline보다 늦은 시점 - 그룹핑이 끝난 뒤에 시작하는 별도 단계라 체크포인트가 다르다.
+    stage4_deadline: 4차 Top N 사후 재검토 몫의 절대 마감 시각.
     issue_grouper.stage4_dedupe_and_promote() 호출(국내/해외 + 카테고리별 최대 18회)에 전부 전달.
 
     카테고리별 Top N도 함께 계산해서 반환 - 국내/해외 각 축 안에서 scorer.score_by_category()로
@@ -265,8 +258,6 @@ def score(articles: list[dict], model, top_n: int = TOP_N,
     같은 사건인지 LLM으로 한 번 더 확인 후 병합하고 빈 자리는 다음 순위로 채운다.
     카테고리별은 scorer.score_by_category의 dedupe_fn 콜백으로 연결한다.
     """
-    groups = issue_grouper.group_issues(articles, model=model, deadline=grouping_deadline)
-
     domestic_groups = []
     international_groups = []
     for group in groups:
@@ -408,27 +399,32 @@ def step4_llm_summary(domestic_ranked: list[dict],
 # 오케스트레이션 진입점
 # ---------------------------------------------------------------------------
 
-def run() -> None:
-    # 이번 실행이 다룰 "어제" 절대 구간 - 파이프라인 시작 시점에 딱 한 번 계산해서
-    # 수집(naver/gdelt)과 정규화(신선도 판정) 양쪽에 그대로 넘긴다 (_compute_collection_window 참고).
-    window_start, window_end = _compute_collection_window()
-    print(f"[main] 이번 실행 수집 구간: {window_start.isoformat()} ~ {window_end.isoformat()} (UTC)")
+def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list[str],
+                 window_start: datetime, window_end: datetime,
+                 process_start: float | None = None) -> None:
+    """
+    [2] 정규화 ~ [6] 배포 전체. run()(단일 실행, 로컬 테스트용)과 process_stage.py(Job
+    체이닝의 process Job)가 공유하는 본체 - process_start만 호출부가 정해서 넘겨준다
+    (run()은 파이프라인 전체가 시작된 시각, process_stage.py는 자기 Job이 시작된 시각).
+    None이면 이 함수 시작 시점을 기준으로 삼는다.
 
-    # 파이프라인 전역 시간예산 - 이 시점(0분) 기준으로 위 5개 체크포인트(분)를 절대 마감
-    # 시각으로 한 번에 계산해서 아래 각 단계 호출부에 맞는 것을 넘긴다.
-    pipeline_start = time.monotonic()
-    deadline_gdelt = pipeline_start + _CHECKPOINT_GDELT_MIN * 60
-    deadline_relevance = pipeline_start + _CHECKPOINT_RELEVANCE_MIN * 60
-    deadline_grouping = pipeline_start + _CHECKPOINT_GROUPING_MIN * 60
-    deadline_stage4 = pipeline_start + _CHECKPOINT_STAGE4_MIN * 60
-    deadline_summary = pipeline_start + _CHECKPOINT_SUMMARY_MIN * 60
+    이 단계부터 [4-보조]까지 각 단계를 개별 try/except 안전망으로 감싼다 - 예상 못 한
+    예외가 나도 그 단계만 기본값으로 넘어가고, 이미 모은 articles는 살려서 [5] 저장/
+    [6] 배포까지 도달하게 함.
+    """
+    if process_start is None:
+        process_start = time.monotonic()
 
-    print("=== [1] 수집 시작 ===")
-    articles, gdelt_timeline, failed_sources = run_collectors(window_start, window_end, deadline=deadline_gdelt)
+    deadline_relevance = process_start + RELEVANCE_TIME_BUDGET_SECONDS
+    deadline_category = process_start + CATEGORY_RECLASSIFY_TIME_BUDGET_SECONDS
+    # 그룹핑/4차 재검토/요약은 무제한 - float("inf")를 명시적으로 넘겨야 각 함수의
+    # "deadline 없으면 자기 모듈 기본값으로 폴백"하는 동작을 피할 수 있다(위 상수 선언부
+    # 주석 참고).
+    deadline_grouping = float("inf")
+    deadline_stage4 = float("inf")
+    deadline_summary = float("inf")
 
     print("\n=== [2] 정규화 ===")
-    # 이 단계부터 [4-보조]까지 각 단계를 안전망으로 감싼다.
-    #  - 예상 못 한 예외가 나도 그 단계만 기본값으로 넘어가고, 이미 모은 articles는 살려서 [5] 저장/[6] 배포까지 도달하게 함.
     try:
         articles = normalize(articles, window_start, window_end)
         keyword_tagger.tag_articles(articles)
@@ -437,32 +433,48 @@ def run() -> None:
         print(f"[main] 🔴 조치필요 [MN-05] - [2] 정규화/태깅 단계에서 예상 못 한 오류 발생 - 원본 기사 그대로 다음 단계로 진행: "
               f"{type(e).__name__} - {e!r}")
 
-    print("\n=== [2.5] 관련성 필터 ===")
-    # 키워드 매칭만으로 못 거르는 오매칭(동음이의어, 각주성 언급 등)을 LLM이 맥락으로 판단해 필터링
+    print("\n=== [2.1] 이슈 그룹핑 임베딩 모델 로드 ===")
+    embedding_model = _load_embedding_model()
+
+    print("\n=== [2.2] 이슈 그룹핑 ===")
+    # 관련성 필터보다 먼저 실행 - 필터를 "그룹 대표 1건만 판단"하는 방식으로 바꾸면서
+    # 그룹핑 자체가 관련성 필터보다 먼저 끝나 있어야 하는 순서가 됨(아래 [2.5] 참고).
     try:
-        articles = relevance_filter.filter_articles(articles, deadline=deadline_relevance)
+        groups = issue_grouper.group_issues(articles, model=embedding_model, deadline=deadline_grouping)
+    except Exception as e:
+        print(f"[main] 🔴 조치필요 [MN-16] - [2.2] 이슈 그룹핑 단계에서 예상 못 한 오류 발생 - "
+              f"그룹핑 없이(기사 1건 = 그룹 1개) 다음 단계로 진행: {type(e).__name__} - {e!r}")
+        groups = [[a] for a in articles]
+
+    print("\n=== [2.5] 관련성 필터 (그룹 대표 1건씩 판단) ===")
+    # 키워드 매칭만으로 못 거르는 오매칭(동음이의어, 각주성 언급 등)을 LLM이 맥락으로 판단해 필터링.
+    # 그룹 대표(issue_grouper._sort_group_by_representative가 판단 근거 텍스트가 가장 긴
+    # 기사를 대표로 정렬해둠) 1건만 판단해서 그룹 전체에 적용 - 같은 사건 기사를 하나씩
+    # 따로 물어볼 필요가 없다는 판단(호출 수 절감 + 판정 불일치 방지).
+    try:
+        groups = relevance_filter.filter_groups(groups, deadline=deadline_relevance)
     except Exception as e:
         print(f"[main] 🔴 조치필요 [MN-06] - [2.5] 관련성 필터 단계에서 예상 못 한 오류 발생 - 필터링 없이 다음 단계로 진행: "
               f"{type(e).__name__} - {e!r}")
 
-    print("\n=== [2.6] 카테고리 재분류 ===")
+    print("\n=== [2.6] 카테고리 재분류 (그룹 대표 1건씩 판단) ===")
     # keyword_tagger(사전 매칭)와 relevance_filter(LLM 판단)의 기준이 달라서, 사전엔 안 걸려 "기타"로 붙었는데
-    # relevance_filter는 "관련 있음"으로 확정하는 기사가 생길 수 있다 - 이런 기사만 다시 LLM에 물어 재분류.
+    # relevance_filter는 "관련 있음"으로 확정하는 그룹이 생길 수 있다 - 이런 그룹만 대표 기사로 다시 LLM에 물어 재분류.
     try:
-        articles = relevance_filter.recategorize_uncategorized(articles, deadline=deadline_relevance)
+        groups = relevance_filter.recategorize_uncategorized_groups(groups, deadline=deadline_category)
     except Exception as e:
         print(f"[main] 🔴 조치필요 [MN-07] - [2.6] 카테고리 재분류 단계에서 예상 못 한 오류 발생 - 재분류 없이 다음 단계로 진행: "
               f"{type(e).__name__} - {e!r}")
 
-    print("\n=== [2.1] 이슈 그룹핑 임베딩 모델 로드 ===")
-    embedding_model = _load_embedding_model()
+    # 카테고리 집계([3-보조])/raw.json 저장([5])은 개별 기사 단위 리스트가 필요해서,
+    # 필터링/재분류까지 끝난 groups를 다시 평평한 리스트로 펼친다.
+    articles = [a for g in groups for a in g]
 
     print("\n=== [3] 스코어링 ===")
     try:
         (domestic_ranked, international_ranked,
          domestic_category_ranked, international_category_ranked) = score(
-            articles, embedding_model, top_n=TOP_N,
-            grouping_deadline=deadline_grouping, stage4_deadline=deadline_stage4)
+            groups, top_n=TOP_N, stage4_deadline=deadline_stage4)
         scorer.print_top_n("국내", domestic_ranked, n=TOP_N)
         scorer.print_top_n("해외", international_ranked, n=TOP_N)
         scorer.print_category_top_n("국내", domestic_category_ranked, n=CATEGORY_TOP_N)
@@ -544,6 +556,26 @@ def run() -> None:
         saved_dir_note = f"{saved_dir}/scored.json에도" if saved_dir else "(data/ 파일에는 안 남았지만)"
         print(f"\n[main] 🔴 조치필요 [MN-14] - 이번 실행 실패 소스: {failed_sources} "
               f"({saved_dir_note} failed_sources로 같이 저장됨)")
+
+
+def run() -> None:
+    """
+    단일 프로세스로 전체 파이프라인([1] 수집 ~ [6] 배포)을 한 번에 실행 - 로컬 테스트용.
+    실제 운영은 Job 체이닝(collect_stage.py + process_stage.py, run-pipline.yml)을 쓴다 -
+    거긴 GDELT 수집과 [2] 이후를 별도 Job으로 나눠서 각자 자기 몫의 6시간을 쓰지만, 이
+    함수는 한 프로세스 안에서 순서대로 다 돈다(GDELT는 gdelt_collector 자체 기본값인
+    5시간까지 쓸 수 있음 - deadline을 안 넘기면 그 모듈 기본값으로 폴백하는 동작 그대로 이용).
+    """
+    window_start, window_end = _compute_collection_window()
+    print(f"[main] 이번 실행 수집 구간: {window_start.isoformat()} ~ {window_end.isoformat()} (UTC)")
+
+    pipeline_start = time.monotonic()
+
+    print("=== [1] 수집 시작 ===")
+    articles, gdelt_timeline, failed_sources = run_collectors(window_start, window_end)
+
+    run_process(articles, gdelt_timeline, failed_sources, window_start, window_end,
+                process_start=pipeline_start)
 
 
 if __name__ == "__main__":

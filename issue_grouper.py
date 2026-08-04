@@ -587,12 +587,37 @@ def stage3_llm_assist(borderline_pairs: list[tuple[dict, dict, float]],
 # 최종 진입점: 1차 + 2차 + 3차를 합쳐서 scorer.py에 바로 넘길 수 있는 형태로 반환
 # ---------------------------------------------------------------------------
 
+def _sort_group_by_representative(group: list[dict]) -> list[dict]:
+    """
+    그룹 내 기사를 "판단 근거가 될 텍스트가 가장 긴" 순으로 정렬해, 맨 앞(index 0)이 그
+    그룹의 대표가 되게 한다 - 관련성 필터/카테고리 재분류(대표 1건만 LLM에 물어봄,
+    relevance_filter.filter_groups/recategorize_uncategorized_groups 참고)와 이후 표시
+    단계(scorer.score_group의 titles[0]을 대표 제목으로 쓰는 곳들)가 전부 이 순서를 그대로
+    신뢰한다.
+
+    "본문"(body)을 기준으로 삼고 싶지만, 이 프로젝트의 두 소스(네이버/GDELT) 모두 article
+    dict의 body 필드가 항상 None이다(네이버는 검색 API 자체가 본문 미제공, GDELT는 스펙에
+    명시된 그대로 본문 미제공) - 실제로 있는 텍스트 중 가장 실질적인 건 네이버의
+    description(GDELT는 이것도 없음)이라, body가 없으면 description으로 대체해서 비교한다.
+    둘 다 없으면(흔한 경우 - 특히 GDELT만 있는 그룹) 텍스트 기준 비교가 무의미하므로 원래
+    순서의 첫 기사가 그대로 대표로 남는다(sorted()는 안정 정렬이라 동점자는 원래 순서 유지).
+    """
+    def _material_length(article: dict) -> int:
+        text = article.get("body") or article.get("description") or ""
+        return len(text)
+    return sorted(group, key=_material_length, reverse=True)
+
+
 def group_issues(articles: list[dict], model=None, deadline: float | None = None) -> list[list[dict]]:
     """
     1차(사전) + 2차(임베딩) + 3차(LLM 보조)를 순서대로 실행해 최종 이슈 그룹 리스트를 만든다.
 
     이 함수의 반환값은 scorer.score_and_rank()가 받는 입력과 형태가 동일하다.
     (list[list[dict]]) - main.py의 score()가 이 함수를 호출해서 씀.
+
+    반환되는 각 그룹은 _sort_group_by_representative()로 정렬돼 있다 - index 0이 그룹의
+    "대표 기사"라는 뜻을, 이 함수를 거치는 모든 호출부가 신뢰할 수 있다(관련성 필터/카테고리
+    재분류/화면 표시 전부 이 관례를 따름).
 
     deadline: time.monotonic() 기준 절대 마감 시각(main.py의 파이프라인 전역 공유 예산에서
     계산됨). stage3_llm_assist에 그대로 전달되고, 아래 3차 호출이 두 군데(직접 호출 +
@@ -613,7 +638,7 @@ def group_issues(articles: list[dict], model=None, deadline: float | None = None
         # 자체가 안 생기므로 3차도 자연히 생략됨)
         print("[issue_grouper] 🟡 주의 [IG-05] - 임베딩 모델이 없어 2차(임베딩) 매칭 생략 - 1차 결과만 사용")
         singleton = [[a] for a in stage1_unmatched]
-        return stage1_grouped + singleton
+        return [_sort_group_by_representative(g) for g in stage1_grouped + singleton]
 
     stage2_grouped, still_unmatched, borderline_pairs = stage2_group(stage1_unmatched, model=model)
 
@@ -627,7 +652,7 @@ def group_issues(articles: list[dict], model=None, deadline: float | None = None
         components, confirmed_pairs,
         extra_confirm=lambda pairs: stage3_llm_assist(pairs, deadline=deadline))
 
-    return stage1_grouped + components
+    return [_sort_group_by_representative(g) for g in stage1_grouped + components]
 
 
 def _merge_confirmed_components(components: list[list[dict]],
