@@ -21,7 +21,7 @@ AI·IT 뉴스 큐레이션 시스템의 오케스트레이션 레이어.
 import os
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import gdelt_collector
 import naver_collector
@@ -33,6 +33,33 @@ import category_aggregator
 import relevance_filter
 import storage
 import deploy
+
+_KST = timezone(timedelta(hours=9))
+
+
+def _compute_collection_window(reference: datetime | None = None) -> tuple[datetime, datetime]:
+    """
+    이번 실행이 다룰 "어제" 하루를 절대 구간([window_start, window_end), UTC datetime)으로
+    계산한다 - "어제 00:00 KST ~ 오늘 00:00 KST". 파이프라인 시작 시점에 딱 한 번만 호출해서
+    naver_collector.collect()/gdelt_collector.collect()/normalize()에 전부 동일하게 넘긴다.
+
+    예전엔 각 collector가 "지금부터 24시간 전까지"를 자기 호출 시점마다 따로 계산했는데
+    (naver_collector.py의 옛 _is_recent, gdelt_collector.py의 옛 TIMESPAN="1d"), 이게 문제였다:
+    GDELT 수집이 최대 220분에 걸쳐 배치 단위로 순차 요청되다 보니, 같은 실행 안에서도 먼저
+    처리된 키워드와 나중에 처리된 키워드가 서로 다른 절대 구간을 보게 되는 드리프트가 있었다
+    (최대 3~4시간 - gdelt_collector.py의 _is_in_window 선언부 주석 참고). 여기서 고정 구간을
+    한 번만 계산해서 전부에 그대로 넘기면, 몇 시에 처리되든 항상 정확히 같은 구간을 보게 된다.
+
+    파이프라인이 매일 00:01 KST에 도는 것과 맞물려서, "어제 00:00~오늘 00:00 KST"가 곧
+    "직전 실행 이후 오늘 실행 시작까지"와 거의 일치한다 - 발송 시점의 "전날 기사"라는 취지에
+    자연스럽게 맞아떨어진다.
+    """
+    now_kst = (reference or datetime.now(timezone.utc)).astimezone(_KST)
+    today_midnight_kst = now_kst.replace(hour=0, minute=0, second=0, microsecond=0)
+    window_end = today_midnight_kst
+    window_start = window_end - timedelta(days=1)
+    return window_start.astimezone(timezone.utc), window_end.astimezone(timezone.utc)
+
 
 # 일간 Top N(국내/해외 각 축) + 카테고리별 Top N. 환경변수로 조정 가능, 미설정 시 기존 기본값(5/1).
 # CATEGORY_TOP_N을 올리면 LLM 요약 호출이 카테고리 수(최대 9) x 국내/해외(2) x 이 값만큼 늘어나므로
@@ -71,16 +98,19 @@ PIPELINE_TIME_BUDGET_SECONDS = _CHECKPOINT_SUMMARY_MIN * 60  # 355분(5시간 55
 # 1) 수집 레이어
 # ---------------------------------------------------------------------------
 
-def run_collectors(deadline: float | None = None) -> tuple[list[dict], dict, list[str]]:
+def run_collectors(window_start: datetime, window_end: datetime,
+                    deadline: float | None = None) -> tuple[list[dict], dict, list[str]]:
     """
     naver/gdelt collector를 순서대로 실행.
 
     각 collector를 개별 try/except로 감싸서, 하나가 통째로 실패해도(import 실패 등) 나머지는
     계속 진행한다 - collector 내부의 세밀한 방어와 별개로, 모듈 자체가 죽는 경우의 마지막 방어선.
 
+    window_start/window_end: 이번 실행이 다룰 절대 구간(_compute_collection_window 참고).
+    두 collector 모두에 그대로 전달 - 몇 시에 처리되든 정확히 같은 구간을 보게 하기 위함.
+
     deadline: 파이프라인 전역 공유 예산의 절대 마감 시각. gdelt_collector.collect()에 그대로
-    전달한다. 네이버 수집은 재시도 루프가 없어 시간예산 메커니즘 자체가 없으므로 이 값을 안 씀
-    (naver_collector.collect()는 인자 없이 그대로 호출).
+    전달한다. 네이버 수집은 재시도 루프가 없어 시간예산 메커니즘 자체가 없으므로 이 값을 안 씀.
 
     반환값: all_articles(두 collector 결과 합친 리스트, 공통 스키마라 합치기만 하면 됨),
             gdelt_timeline(참고 지표, scored.json에 그대로 저장), failed_sources(실패 소스명)
@@ -90,7 +120,7 @@ def run_collectors(deadline: float | None = None) -> tuple[list[dict], dict, lis
     failed_sources: list[str] = []
 
     try:
-        naver_articles = naver_collector.collect()
+        naver_articles = naver_collector.collect(window_start, window_end)
         all_articles.extend(naver_articles)
         print(f"[main] 네이버 수집 완료 - {len(naver_articles)}건")
     except Exception as e:
@@ -98,7 +128,8 @@ def run_collectors(deadline: float | None = None) -> tuple[list[dict], dict, lis
         failed_sources.append("네이버")
 
     try:
-        gdelt_articles, gdelt_timeline = gdelt_collector.collect(deadline=deadline)
+        gdelt_articles, gdelt_timeline = gdelt_collector.collect(
+            deadline=deadline, window_start=window_start, window_end=window_end)
         all_articles.extend(gdelt_articles)
         print(f"[main] GDELT 수집 완료 - {len(gdelt_articles)}건")
     except Exception as e:
@@ -112,17 +143,16 @@ def run_collectors(deadline: float | None = None) -> tuple[list[dict], dict, lis
 # 2) 정규화 레이어 - 완전 동일 기사 제거 + 키워드 태깅
 # ---------------------------------------------------------------------------
 
-def normalize(articles: list[dict]) -> list[dict]:
+def normalize(articles: list[dict], window_start: datetime, window_end: datetime) -> list[dict]:
     """
     완전 동일 기사(같은 URL 중복 수집) 제거 - 이슈 그룹핑과는 다른 개념, 페이지네이션 겹침·재실행
     등으로 정말 똑같은 기사가 두 번 들어온 경우만 거른다. 첫 번째로 본 URL을 유지.
 
-    그다음 scorer.is_stale()로 24시간(scorer.FRESHNESS_WINDOW_HOURS) 초과 기사를 걸러낸다.
-    naver/gdelt 각 collector가 "수집 시점 기준 24시간 이내"로 이미 걸렀는데도 이게 또
-    필요한 이유: 수집 이후 관련성 필터/그룹핑/스코어링까지 시간이 더 흐르면서(GDELT만 최대
-    220분) 수집 시점엔 24시간 안이었던 기사가 그사이 24시간을 넘길 수 있다 - 정규화 직후
-    (수집 바로 다음)로 최대한 앞당겨서 걸러야 이 드리프트를 최소화할 수 있다. 걸러진 기사는
-    이후 관련성 필터/그룹핑에도 안 들어가므로 불필요한 LLM 호출도 그만큼 줄어든다.
+    그다음 scorer.is_in_window()로 [window_start, window_end) 구간을 벗어난 기사를 걸러낸다.
+    naver/gdelt 각 collector가 이미 이 구간(_compute_collection_window 참고)으로 정확히
+    걸러서 수집하므로, 정상 흐름에서는 여기서 걸러질 기사가 없어야 정상 - 이건 방어선
+    (defense in depth) 역할이다(예: collector 로직 결함, 향후 이 구간 필터를 안 지키는 새
+    소스가 추가되는 경우 등에 대비).
     """
     seen_urls: set[str] = set()
     deduped = []
@@ -139,19 +169,20 @@ def normalize(articles: list[dict]) -> list[dict]:
         print(f"[main] 완전 동일 기사(URL 중복) {removed}건 제거")
 
     fresh = []
-    stale_count = 0
+    out_of_window_count = 0
     for article in deduped:
         try:
-            if scorer.is_stale(article["published_at"]):
-                stale_count += 1
+            if not scorer.is_in_window(article["published_at"], window_start, window_end):
+                out_of_window_count += 1
                 continue
         except (KeyError, ValueError, TypeError):
             pass  # published_at 없음/형식 이상 - 판단 못 하니 안전하게 통과시킴(걸러내지 않음)
         fresh.append(article)
 
-    if stale_count:
-        print(f"[main] 신선도(24시간 초과) 기준 {stale_count}건 제외 - "
-              f"수집 시점엔 기준 이내였는데 이후 단계 진행 중 시간이 흘러 넘긴 경우")
+    if out_of_window_count:
+        print(f"[main] 🟡 주의 - 수집 구간({window_start.isoformat()} ~ {window_end.isoformat()}) "
+              f"밖 기사 {out_of_window_count}건 제외 - collector가 이미 이 구간으로 거르므로 "
+              f"정상 흐름에선 0건이어야 함, 0이 아니면 collector 쪽 확인 필요")
 
     return fresh
 
@@ -378,6 +409,11 @@ def step4_llm_summary(domestic_ranked: list[dict],
 # ---------------------------------------------------------------------------
 
 def run() -> None:
+    # 이번 실행이 다룰 "어제" 절대 구간 - 파이프라인 시작 시점에 딱 한 번 계산해서
+    # 수집(naver/gdelt)과 정규화(신선도 판정) 양쪽에 그대로 넘긴다 (_compute_collection_window 참고).
+    window_start, window_end = _compute_collection_window()
+    print(f"[main] 이번 실행 수집 구간: {window_start.isoformat()} ~ {window_end.isoformat()} (UTC)")
+
     # 파이프라인 전역 시간예산 - 이 시점(0분) 기준으로 위 5개 체크포인트(분)를 절대 마감
     # 시각으로 한 번에 계산해서 아래 각 단계 호출부에 맞는 것을 넘긴다.
     pipeline_start = time.monotonic()
@@ -388,13 +424,13 @@ def run() -> None:
     deadline_summary = pipeline_start + _CHECKPOINT_SUMMARY_MIN * 60
 
     print("=== [1] 수집 시작 ===")
-    articles, gdelt_timeline, failed_sources = run_collectors(deadline=deadline_gdelt)
+    articles, gdelt_timeline, failed_sources = run_collectors(window_start, window_end, deadline=deadline_gdelt)
 
     print("\n=== [2] 정규화 ===")
     # 이 단계부터 [4-보조]까지 각 단계를 안전망으로 감싼다.
     #  - 예상 못 한 예외가 나도 그 단계만 기본값으로 넘어가고, 이미 모은 articles는 살려서 [5] 저장/[6] 배포까지 도달하게 함.
     try:
-        articles = normalize(articles)
+        articles = normalize(articles, window_start, window_end)
         keyword_tagger.tag_articles(articles)
         keyword_tagger.print_category_distribution(articles)
     except Exception as e:

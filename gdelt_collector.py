@@ -302,20 +302,42 @@ def _is_false_positive(keyword: str, title: str) -> bool:
     title_normalized = _normalize_spacing(title.lower())
     return any(_normalize_spacing(p.lower()) in title_normalized for p in patterns)
 
-# 이 프로젝트는 매일 새벽 실행이므로, 전날(최근 1일) 이내 기사만 남긴다 (naver/watt와 동일 방침).
-# (예전엔 주 1회 실행이라 7일이었음 - 일간 전환하면서 변경. 부수 효과로 TIMESPAN 창이
-# 좁아져서 GDELT 250건 상한 크라우딩도 완화됨 - 한 키워드가 짧은 기간에 250건을 채우기가
-# 7일 창일 때보다 훨씬 어려움)
-DAYS_BACK = 1
-
-# GDELT DOC API의 TIMESPAN 파라미터 포맷: 숫자+단위(min/h/d/w/m) 확인됨
-# (GDELT 공식 블로그 "GDELT DOC 2.0 API Debuts!" 기준 - 검색으로 검증함)
-TIMESPAN = f"{DAYS_BACK}d"
- 
+# 이 프로젝트는 매일 새벽 실행이므로, 전날(어제 00:00 KST ~ 오늘 00:00 KST) 이내 기사만
+# 남긴다 (naver/watt와 동일 방침). main.py가 파이프라인 시작 시점에 이 절대 구간을 딱 한 번
+# 계산해서 collect()에 window_start/window_end로 넘겨준다.
+#
+# 예전엔 TIMESPAN(상대값, "지금부터 Nd")을 GDELT API에 그대로 넘겼는데, 배치 요청이 최대
+# 220분에 걸쳐 순차적으로 나가다 보니 요청마다 "지금"이 달라져서 키워드별로 실제로 보는
+# 절대 구간이 최대 3~4시간씩 밀리는 드리프트가 있었다(먼저 처리된 키워드는 일찍 끊기고,
+# 나중에 처리된 키워드는 그만큼 최신 기사까지 봄 - 같은 실행 안에서 키워드마다 기준이
+# 달라지는 셈). gdeltdoc의 Filters가 start_date/end_date(절대 날짜, 초 단위 정밀도)도
+# 지원해서, TIMESPAN 대신 이걸 쓰면 어느 키워드가 몇 시에 처리되든 전부 정확히 같은 구간을
+# 보게 되어 이 드리프트가 사라진다(naver_collector.py도 동일한 이유로 동일하게 전환함).
+#
+# DAYS_BACK은 window_start/window_end를 못 받았을 때(예: 이 모듈만 단독 테스트)만 쓰는
+# standalone 기본값으로 격하됨 - _default_window() 참고. TIMESPAN 상수 자체는 제거함
+# (더 이상 실제 요청에 안 쓰임 - Filters가 start_date/end_date를 직접 받음).
+DAYS_BACK = 1  # standalone 기본값 - 정상 실행에선 main.py의 window_start/window_end가 우선
 
 # article_search는 GDELT DOC API 자체 한계로 한 번 호출에 최대 250건까지만 반환됨
 # (naver처럼 start 파라미터로 추가 페이지네이션하는 기능 자체가 없음 - API 레벨 한계)
 MAX_RECORDS = 250
+
+
+def _default_window(reference: datetime | None = None) -> tuple[datetime, datetime]:
+    """
+    window_start/window_end를 못 받았을 때(예: 이 모듈만 단독 테스트) 쓰는 기본 수집 구간
+    - "지금부터 24시간 전까지"의 롤링 윈도우. naver_collector._default_window와 동일한 목적/
+    한계(달력 경계에 안 맞는 근사치) - main.py가 정식으로 계산하는 "어제 00:00 KST ~ 오늘
+    00:00 KST" 고정 구간과는 다르다.
+    """
+    now = reference or datetime.now(timezone.utc)
+    return now - timedelta(days=DAYS_BACK), now
+
+
+def _is_in_window(dt: datetime, window_start: datetime, window_end: datetime) -> bool:
+    """dt가 [window_start, window_end) 절대 구간 안에 있는지 확인 (naver_collector._is_in_window와 동일 목적)."""
+    return window_start <= dt < window_end
 
 # --- 시간 예산(전체 GDELT 수집 하드 데드라인) ---
 #
@@ -575,11 +597,6 @@ def _parse_seendate(raw: str) -> datetime:
     raise ValueError(f"seendate 파싱 실패, 형식 확인 필요: {raw!r}")
 
 
-def _is_recent(dt: datetime, days: int) -> bool:
-    cutoff = datetime.now(dt.tzinfo) - timedelta(days=days)
-    return dt >= cutoff
-
-
 def _extract_domain(url: str) -> str:
     """
     기사 원문 URL에서 도메인만 뽑아 press로 사용한다 (naver_collector의
@@ -591,7 +608,8 @@ def _extract_domain(url: str) -> str:
     return domain.replace("www.", "")
 
 
-def _collect_articles_for_keyword(gd: "GdeltDoc", keyword: str) -> tuple[bool, list[dict], str | None]:
+def _collect_articles_for_keyword(gd: "GdeltDoc", keyword: str,
+                                   window_start: datetime, window_end: datetime) -> tuple[bool, list[dict], str | None]:
     """
     한 키워드에 대해 article_search만 수행하고 (성공 여부, 기사 리스트,
     실패 사유)를 반환한다. 실패 사유는 성공 시 None, 실패 시
@@ -604,8 +622,11 @@ def _collect_articles_for_keyword(gd: "GdeltDoc", keyword: str) -> tuple[bool, l
     성공 여부는 article_search 호출 자체가 예외 없이 끝났는지 기준 (기사가
     0건이어도 호출 자체가 정상이면 True - 그 키워드는 그냥 최근 기사가 없는
     것이므로 재시도 대상이 아님).
+
+    window_start/window_end: [window_start, window_end) 절대 구간으로 GDELT에 직접 요청한다
+    (Filters의 start_date/end_date - 위 DAYS_BACK 선언부 주석 참고, TIMESPAN 상대값 대신).
     """
-    f = Filters(keyword=keyword, timespan=TIMESPAN, num_records=MAX_RECORDS)
+    f = Filters(keyword=keyword, start_date=window_start, end_date=window_end, num_records=MAX_RECORDS)
     keyword_articles = []
     false_positive_count = 0
 
@@ -630,7 +651,10 @@ def _collect_articles_for_keyword(gd: "GdeltDoc", keyword: str) -> tuple[bool, l
                     print(f"[gdelt] 🟡 주의 [GD-04] - '{keyword}' 기사 스킵 - {type(e).__name__} - {e!r}")
                     continue
 
-                if not _is_recent(published_at, DAYS_BACK):
+                if not _is_in_window(published_at, window_start, window_end):
+                    # GDELT가 이미 start_date/end_date로 걸러서 보내주지만, 클라이언트 쪽에서도
+                    # 한 번 더 확인한다 - API가 구간 경계에서 살짝 여유 있게 돌려주는 경우가
+                    # 있어서(관측된 적 있음, GDELT 쪽 정확한 사양 비공개) 안전망으로 유지.
                     continue
 
                 keyword_articles.append({
@@ -649,7 +673,7 @@ def _collect_articles_for_keyword(gd: "GdeltDoc", keyword: str) -> tuple[bool, l
                 })
 
         fp_note = f" (오매칭 필터로 {false_positive_count}건 제외)" if false_positive_count else ""
-        print(f"[gdelt] '{keyword}' article_search -> 최근 {DAYS_BACK}일 이내 "
+        print(f"[gdelt] '{keyword}' article_search -> 구간 내 "
               f"{len(keyword_articles)}건 수집 완료{fp_note}")
         return True, keyword_articles, None
 
@@ -668,7 +692,8 @@ def _collect_articles_for_keyword(gd: "GdeltDoc", keyword: str) -> tuple[bool, l
         return False, [], f"{type(e).__name__}: {e}"
 
 
-def _collect_articles_for_keywords(gd: "GdeltDoc", keywords: list[str]) -> tuple[bool, list[dict]]:
+def _collect_articles_for_keywords(gd: "GdeltDoc", keywords: list[str],
+                                    window_start: datetime, window_end: datetime) -> tuple[bool, list[dict]]:
     """
     여러 키워드를 하나의 OR 쿼리로 묶어서 article_search를 "한 번만" 호출한다.
     (모듈 docstring "GDELT 429 대응 정리" 참고)
@@ -683,7 +708,7 @@ def _collect_articles_for_keywords(gd: "GdeltDoc", keywords: list[str]) -> tuple
       - 오매칭 자체가 "부분 문자열 포함 매칭" 때문에 생기는 구조적 문제라, 어떤 키워드가 트리거했든 같은 필터를 적용하는 게 자연스럽다.
     """
     label = " OR ".join(keywords)
-    f = Filters(keyword=keywords, timespan=TIMESPAN, num_records=MAX_RECORDS)
+    f = Filters(keyword=keywords, start_date=window_start, end_date=window_end, num_records=MAX_RECORDS)
     combined_articles = []
     false_positive_count = 0
 
@@ -703,7 +728,8 @@ def _collect_articles_for_keywords(gd: "GdeltDoc", keywords: list[str]) -> tuple
                     print(f"[gdelt] 🟡 주의 [GD-07] - '{label}' 기사 스킵 - {type(e).__name__} - {e!r}")
                     continue
 
-                if not _is_recent(published_at, DAYS_BACK):
+                if not _is_in_window(published_at, window_start, window_end):
+                    # _collect_articles_for_keyword와 동일한 이유의 클라이언트 쪽 안전망 (위 주석 참고)
                     continue
 
                 combined_articles.append({
@@ -719,7 +745,7 @@ def _collect_articles_for_keywords(gd: "GdeltDoc", keywords: list[str]) -> tuple
                 })
 
         fp_note = f" (오매칭 필터로 {false_positive_count}건 제외)" if false_positive_count else ""
-        print(f"[gdelt] '{label}' article_search -> 최근 {DAYS_BACK}일 이내 "
+        print(f"[gdelt] '{label}' article_search -> 구간 내 "
               f"{len(combined_articles)}건 수집 완료{fp_note}")
 
         # --- 키워드별 매칭 현황 (제목 기준 근사치) ---
@@ -744,14 +770,15 @@ def _collect_articles_for_keywords(gd: "GdeltDoc", keywords: list[str]) -> tuple
         # 재시도 대신 그 즉시 키워드별 개별 요청으로 내려가서 문제 키워드만 격리하고, 나머지는 정상적으로 살린다.
         print(f"[gdelt] 🟡 주의 [GD-08] - '{label}' article_search 실패(쿼리 자체 거부로 추정 - "
               f"{type(e).__name__}: {e}) - 재시도 대신 키워드별 개별 요청으로 즉시 전환")
-        return _collect_articles_individually(gd, keywords)
+        return _collect_articles_individually(gd, keywords, window_start, window_end)
 
     except Exception as e:
         print(f"[gdelt] 🟡 주의 [GD-09] - '{label}' article_search 실패: {type(e).__name__} - {e!r}")
         return False, []
 
 
-def _collect_articles_individually(gd: "GdeltDoc", keywords: list[str]) -> tuple[bool, list[dict]]:
+def _collect_articles_individually(gd: "GdeltDoc", keywords: list[str],
+                                    window_start: datetime, window_end: datetime) -> tuple[bool, list[dict]]:
     """
     결합 쿼리(_collect_articles_for_keywords)가 "phrase too short"류
       - 재시도로 해결 안 되는
@@ -767,7 +794,7 @@ def _collect_articles_individually(gd: "GdeltDoc", keywords: list[str]) -> tuple
     all_articles = []
     any_success = False
     for keyword in keywords:
-        success, keyword_articles, _reason = _collect_articles_for_keyword(gd, keyword)
+        success, keyword_articles, _reason = _collect_articles_for_keyword(gd, keyword, window_start, window_end)
         if success:
             any_success = True
             all_articles.extend(keyword_articles)
@@ -775,7 +802,8 @@ def _collect_articles_individually(gd: "GdeltDoc", keywords: list[str]) -> tuple
     return any_success, all_articles
 
 
-def collect(keywords: list[str] | None = None, deadline: float | None = None) -> tuple[list[dict], dict]:
+def collect(keywords: list[str] | None = None, deadline: float | None = None,
+            window_start: datetime | None = None, window_end: datetime | None = None) -> tuple[list[dict], dict]:
     """
     KEYWORDS_EN을 대상으로 GDELT에서 기사 메타데이터를 수집한다.
     이 함수가 gdelt_collector의 '진입점'.
@@ -787,6 +815,12 @@ def collect(keywords: list[str] | None = None, deadline: float | None = None) ->
     deadline: time.monotonic() 기준 절대 마감 시각. main.py가 파이프라인 전역 공유 예산에서
               계산해 넘겨준다 - 안 넘겨받으면(예: 이 모듈만 따로 테스트) 이 모듈 자체 기본값
               (TIME_BUDGET_SECONDS)으로 지금 시각 기준 마감을 계산한다.
+
+    window_start/window_end: [window_start, window_end) 절대 구간. main.py가 파이프라인
+              시작 시점에 "어제 00:00 KST ~ 오늘 00:00 KST"로 계산해 넘겨준다 - 모든 배치/
+              개별 요청이 이 동일한 구간을 그대로 쓰므로, 몇 시에 처리되든 결과가 흔들리지
+              않는다(위 DAYS_BACK 선언부 주석 참고). 안 넘겨받으면(예: 이 모듈만 따로 테스트)
+              _default_window()로 대체.
 
     ** 적응형 배치 수집 **
     키워드를 전부 OR로 묶으면 250건 상한을 한 키워드가 독차지하는 문제가 생길 수 있고,
@@ -811,6 +845,9 @@ def collect(keywords: list[str] | None = None, deadline: float | None = None) ->
       articles: 공통 스키마 리스트. 다음 단계(정규화/이슈그룹핑)로 그대로 전달됨
       timeline: 시계열 수집을 완전히 제거해서 **항상 빈 딕셔너리(`{}`)**.
     """
+    if window_start is None or window_end is None:
+        window_start, window_end = _default_window()
+
     gd = GdeltDoc()
     # keywords 인자로 명시적으로 넘겨준 게 있으면(테스트용) 그걸 그대로 쓰고,
     # 없으면 구글 시트에 등록된 활성 키워드를 우선 사용, 시트 미설정/읽기
@@ -877,7 +914,7 @@ def collect(keywords: list[str] | None = None, deadline: float | None = None) ->
             pending_individual.append(batch[0])
             continue
 
-        success, batch_articles = _collect_articles_for_keywords(gd, batch)
+        success, batch_articles = _collect_articles_for_keywords(gd, batch, window_start, window_end)
         if not success:
             # 배치 요청 자체가 실패하면(429 등) 바로 개별 요청(5배 요청)으로 전환하지 않는다.
             #  - 429는 쿼리 복잡도가 아니라 "요청을 얼마나 자주 보내는지"에 걸리는 것으로 추정돼서(GDELT가 공식적으로 밝힌 기준은 아니지만 관측 패턴과 일치), 실패했다고 요청 수를 5배로 늘리면 상황을 악화시킬 뿐이다.
@@ -942,7 +979,7 @@ def collect(keywords: list[str] | None = None, deadline: float | None = None) ->
                       f"(키워드 {len(remaining)}개는 이번 실행에서 건너뜀)")
                 still_failed_batches = []
                 break
-            success, batch_articles = _collect_articles_for_keywords(gd, batch)
+            success, batch_articles = _collect_articles_for_keywords(gd, batch, window_start, window_end)
             if success:
                 all_articles.extend(batch_articles)
                 # 재시도로 살아난 배치도 똑같이 정확히 상한 도달 여부만 체크(일관성 유지) - 1단계와
@@ -1000,7 +1037,7 @@ def collect(keywords: list[str] | None = None, deadline: float | None = None) ->
                 round_keywords = []
                 break
 
-            success, keyword_articles, reason = _collect_articles_for_keyword(gd, keyword)
+            success, keyword_articles, reason = _collect_articles_for_keyword(gd, keyword, window_start, window_end)
             if success:
                 all_articles.extend(keyword_articles)
                 failure_reasons.pop(keyword, None)  # 재시도로 살아났으면 이전 실패 기록 제거

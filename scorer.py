@@ -2,8 +2,8 @@
 scorer.py
 언급빈도 계산(Scoring) 담당. 순수 계산만 함 - LLM 안 씀.
 (예전엔 "언급빈도 x 최신가중치"였음 - 일간 전환 이후 최신가중치를 없애고 mention_count
-그대로를 issue_score로 씀. 대신 "24시간 초과 신선도 판정"(is_stale)을 여기서 제공하고,
-실제 필터링은 main.py가 정규화 직후 수행함 - 아래 "신선도 판정" 섹션 참고)
+그대로를 issue_score로 씀. 대신 "고정 절대 구간 안에 있는지 판정"(is_in_window)을 여기서
+제공하고, 실제 필터링은 main.py가 정규화 직후 수행함 - 아래 "신선도 판정" 섹션 참고)
 
 이 모듈의 함수는 전부 "이슈 그룹"(같은 사건 기사 묶음, list[dict])을 입력으로 받는다.
 실제 그룹핑(BGE-M3)은 issue_grouper.group_issues()가 하고, 여기서는 결과를 스코어링만 함.
@@ -27,26 +27,24 @@ from datetime import datetime, timezone
 # 뉴스냐"가 아니라 "하루 중 몇 시 뉴스냐"에 더 가깝게 작동했음 - 늦게 터진 속보는 아직
 # 언론사들이 못 받아써서 mention_count가 원래 낮은데 가중치까지 높게 받고, 일찍 터져서
 # 하루 종일 보도된(그래서 mention_count가 높은) 이슈는 가중치가 깎이는 이중 왜곡이 있었음.
-# 그래서 가중치는 완전히 없애고 issue_score = mention_count로 단순화하고, 대신 "24시간
-# 초과"는 가중치로 깎는 게 아니라 아예 스코어링 이전 단계(main.py normalize 직후)에서
-# 걸러내기로 함(is_stale 참고) - 그 시점 기준으로 걸러야 스코어링 시점까지 시간이 더
-# 지나면서 새로 24시간을 넘기는 경계 사례를 최대한 줄일 수 있다.
-FRESHNESS_WINDOW_HOURS = 24  # naver/gdelt 둘 다 DAYS_BACK=1(24시간)과 맞춤
-
-
-def hours_elapsed(published_at: str, reference: datetime | None = None) -> float:
-    """경과시간 계산(시간 단위, 기준 시각 기본값은 지금). 미래 날짜 등 이상치는 0으로 clamp."""
+# 그래서 가중치는 완전히 없애고 issue_score = mention_count로 단순화함.
+#
+# "24시간 초과 필터"도 그 뒤 한 번 더 바뀌었다 - 처음엔 "경과시간(hours_elapsed) > 24"로
+# 판정했는데, naver_collector.py/gdelt_collector.py가 컬렉터별로 각자 다른 시점에
+# datetime.now()를 불러 컷오프를 계산하다 보니 같은 실행 안에서도 키워드마다 실제로 보는
+# 절대 구간이 최대 몇 시간씩 밀리는 드리프트가 있었다(자세한 배경은 두 collector의
+# _is_in_window 선언부 주석 참고). 지금은 main.py가 파이프라인 시작 시점에 "어제 00:00 KST
+# ~ 오늘 00:00 KST" 고정 절대 구간을 딱 한 번 계산해서 collector에도, 여기 신선도 판정에도
+# 동일하게 넘겨준다 - 그래서 이 함수는 이제 "경과시간 계산" 없이 그 구간에 속하는지만 본다.
+# collector가 이미 이 구간으로 정확히 걸러서 수집하므로, 여기는 방어선(defense in depth)
+# 역할 - 정상 흐름에서는 전부 통과해야 정상이고, 다른 결함(collector 로직 오류, 향후 새
+# 소스가 이 구간 필터를 안 지키는 경우 등)이 있을 때만 실제로 걸러진다.
+def is_in_window(published_at: str, window_start: datetime, window_end: datetime) -> bool:
+    """published_at(ISO 8601)이 [window_start, window_end) 절대 구간 안에 있는지 확인."""
     pub_dt = datetime.fromisoformat(published_at)
-    ref = reference if reference is not None else datetime.now(pub_dt.tzinfo or timezone.utc)
     if pub_dt.tzinfo is None:
         pub_dt = pub_dt.replace(tzinfo=timezone.utc)
-    delta_seconds = (ref - pub_dt).total_seconds()
-    return max(0.0, delta_seconds / 3600)
-
-
-def is_stale(published_at: str, reference: datetime | None = None) -> bool:
-    """FRESHNESS_WINDOW_HOURS(24시간)를 넘겼는지 - main.py가 정규화 직후 이 기준으로 걸러낸다."""
-    return hours_elapsed(published_at, reference) > FRESHNESS_WINDOW_HOURS
+    return window_start <= pub_dt < window_end
 
 
 # --- 동일 언론사 도배 dedup ---
@@ -87,7 +85,7 @@ def score_group(group: list[dict]) -> dict:
     반환값:
       issue_score: mention_count와 동일(dedup 이후 건수) - 예전엔 recency_weight를 곱해
         더한 값이었는데, 일간 전환 이후 재검토해서 가중치를 없앴다(신선도는 이제
-        스코어링이 아니라 main.py 정규화 직후 is_stale()로 아예 걸러내는 쪽으로 이동 -
+        스코어링이 아니라 main.py 정규화 직후 is_in_window()로 아예 걸러내는 쪽으로 이동 -
         위 "신선도 판정" 섹션 참고). 그래도 필드 자체는 정렬/화면 표시에 계속 쓰이므로
         이름은 유지.
       mention_count: dedup 이후 건수 (화면 노출용)

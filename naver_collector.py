@@ -9,7 +9,7 @@ import os
 import time
 import requests
 from urllib.parse import urlparse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
 import keyword_source
@@ -25,20 +25,40 @@ load_dotenv()
 # GitHub Secrets 값을 신규 것으로 교체해야 함, 변수명 자체는 그대로 재사용).
 NAVER_API_URL = "https://naverapihub.apigw.ntruss.com/search/v1/news"
 
-# 매일 새벽 실행이므로 전날(최근 1일) 이내 기사만 남긴다.
-# (예전엔 주 1회 실행이라 7일이었음 - 일간 전환하면서 변경)
-DAYS_BACK = 1
-
 # fallback 키워드. 구글 시트(KEYWORD_SHEET_CSV_URL)가 있으면 그쪽 우선, 없거나 실패 시 이 리스트 사용.
 # 시트가 바뀌면 이것도 수동으로 같이 갱신해야 함 (자동 동기화 아님).
 KEYWORDS = ["인공지능", "AI", "머신러닝", "딥러닝", "챗GPT", "생성형 AI", "자율주행", "로봇", "드론", "메타버스", "가상현실", "증강현실", "블록체인", "NFT", "핀테크", "빅데이터", "클라우드", "사이버보안", "양자컴퓨팅"]
 
+_KST = timezone(timedelta(hours=9))
 
-def _is_recent(published_at: str, days: int) -> bool:
-    """published_at(ISO 8601)이 최근 N일 이내인지 확인."""
+
+def _default_window(reference: datetime | None = None) -> tuple[datetime, datetime]:
+    """
+    main.py가 window_start/window_end를 안 넘겨줬을 때(예: 이 모듈만 단독 테스트) 쓰는
+    기본 수집 구간 - "지금부터 24시간 전까지"의 롤링 윈도우.
+
+    main.py가 정식으로 계산하는 "어제 00:00 KST ~ 오늘 00:00 KST" 고정 구간과는 다르다
+    (달력 경계에 안 맞음) - 어디까지나 standalone 테스트용 근사치.
+    """
+    now = reference or datetime.now(timezone.utc)
+    return now - timedelta(days=1), now
+
+
+def _is_in_window(published_at: str, window_start: datetime, window_end: datetime) -> bool:
+    """
+    published_at(ISO 8601)이 [window_start, window_end) 절대 구간 안에 있는지 확인.
+
+    예전엔 "지금으로부터 N일 이내"(_is_recent, 상대값)였다 - 문제는 여러 키워드를 순회하며
+    호출할 때마다 datetime.now()를 새로 불러서, 같은 실행 안에서도 먼저 처리된 키워드와
+    나중에 처리된 키워드가 서로 다른 절대 구간을 보게 되는 드리프트가 있었다(GDELT 쪽은
+    수집이 최대 220분 걸려서 이 드리프트가 특히 컸음 - gdelt_collector.py 참고). main.py가
+    파이프라인 시작 시점에 딱 한 번 계산한 고정 구간을 여기로 그대로 넘겨받아 쓰면, 어떤
+    키워드가 몇 시에 처리되든 전부 정확히 같은 구간을 보게 되어 이 드리프트가 사라진다.
+    """
     pub_dt = datetime.fromisoformat(published_at)
-    cutoff = datetime.now(pub_dt.tzinfo) - timedelta(days=days)
-    return pub_dt >= cutoff
+    if pub_dt.tzinfo is None:
+        pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+    return window_start <= pub_dt < window_end
 
 
 # 네이버 API가 허용하는 start의 최댓값
@@ -60,8 +80,18 @@ def _phrase_present(article: dict, keyword: str) -> bool:
     return keyword_normalized in combined_normalized
 
 
-def collect() -> list[dict]:
-    """KEYWORDS를 순서대로 돌며 네이버 뉴스를 전부 수집 (진입점)."""
+def collect(window_start: datetime | None = None, window_end: datetime | None = None) -> list[dict]:
+    """
+    KEYWORDS를 순서대로 돌며 네이버 뉴스를 전부 수집 (진입점).
+
+    window_start/window_end: 이 절대 구간([window_start, window_end)) 안의 기사만 남긴다.
+    main.py가 파이프라인 시작 시점에 "어제 00:00 KST ~ 오늘 00:00 KST"로 계산해 넘겨준다 -
+    안 넘겨받으면(예: 이 모듈만 단독 테스트) _default_window()로 대체(지금부터 24시간 전
+    까지의 롤링 윈도우 - 위 _default_window docstring 참고).
+    """
+    if window_start is None or window_end is None:
+        window_start, window_end = _default_window()
+
     client_id = os.environ["NAVER_CLIENT_ID"]
     client_secret = os.environ["NAVER_CLIENT_SECRET"]
 
@@ -82,18 +112,21 @@ def collect() -> list[dict]:
                     if not page:
                         break  # 더 가져올 결과 없음
 
-                    recent_in_page = [r for r in page if _is_recent(r["published_at"], DAYS_BACK)]
-                    phrase_ok = [r for r in recent_in_page if _phrase_present(r, keyword)]
-                    filtered_out = len(recent_in_page) - len(phrase_ok)
+                    in_window = [r for r in page if _is_in_window(r["published_at"], window_start, window_end)]
+                    phrase_ok = [r for r in in_window if _phrase_present(r, keyword)]
+                    filtered_out = len(in_window) - len(phrase_ok)
                     if filtered_out:
                         print(f"[naver] '{keyword}' - 문구 인접성 필터로 {filtered_out}건 제외"
                               f"(AND 매칭 오탐 방지)")
                     keyword_results.extend(phrase_ok)
 
                     # 마지막 항목 = 이 페이지에서 가장 오래된 기사 (sort=date라 항상 마지막이 제일 오래됨)
+                    # window_start보다 오래됐으면 그 뒤 페이지는 전부 구간 밖이므로 더 볼 필요 없음
+                    # (window_end보다 새 기사가 앞쪽 페이지에 섞여있는 건 위 in_window 필터가 알아서 거름).
                     oldest_in_page = page[-1]
-                    if not _is_recent(oldest_in_page["published_at"], DAYS_BACK):
-                        break  # 기간을 벗어났으니 다음 페이지는 더 볼 필요 없음
+                    oldest_dt = datetime.fromisoformat(oldest_in_page["published_at"])
+                    if oldest_dt < window_start:
+                        break
 
                     if len(page) < 100:
                         break  # 100건 미만 = 더 이상 결과 없음
@@ -105,7 +138,7 @@ def collect() -> list[dict]:
                       f"{len(keyword_results)}건은 보존하고 다음 키워드로 진행): {type(e).__name__} - {e!r}")
 
             all_results.extend(keyword_results)
-            print(f"[naver] '{keyword}' -> 최근 {DAYS_BACK}일 이내 {len(keyword_results)}건 "
+            print(f"[naver] '{keyword}' -> 구간 내 {len(keyword_results)}건 "
                   f"({start if start <= MAX_START else MAX_START}건째까지 확인)")
 
             time.sleep(0.2)

@@ -12,9 +12,19 @@
 
 ## 1. 📡 수집 레이어
 
+두 collector 모두 `main.py`가 파이프라인 시작 시점에 계산하는 고정 절대 구간
+([window_start, window_end), "어제 00:00 KST ~ 오늘 00:00 KST")을 그대로 받아서 수집한다
+(`main.py`의 `_compute_collection_window()` 참고). 예전엔 각자 "지금부터 24시간 전까지"를
+호출 시점마다 따로 계산했는데, GDELT 수집이 최대 220분에 걸쳐 배치 단위로 순차 요청되다
+보니 같은 실행 안에서도 먼저 처리된 키워드와 나중에 처리된 키워드가 서로 다른 절대 구간을
+보게 되는 드리프트(최대 3~4시간)가 있었다 - 고정 구간을 한 번만 계산해서 전부에 넘기면
+몇 시에 처리되든 정확히 같은 구간을 보게 되어 이 드리프트가 사라진다.
+
 ### 🇰🇷 네이버 (국내 전담) — `naver_collector.py`
 - 네이버 뉴스 검색 API, `requests.Session()` 재사용
-- 최근 1일(`DAYS_BACK=1`, 매일 새벽 실행이라 전날치), 키워드당 최대 1000건(`MAX_START`)
+- `window_start`/`window_end` 절대 구간 안의 기사만 남김(`_is_in_window`), 키워드당 최대
+  1000건(`MAX_START`). window 인자를 안 받으면(단독 테스트 등) `_default_window()`로
+  "지금부터 24시간 전까지" 롤링 윈도우 사용
 - 공백 포함(여러 단어) 키워드는 네이버 API가 AND로 처리해 무관한 기사가 섞일 수 있어,
   제목+요약에 실제로 인접해서 등장하는지(`_phrase_present`) 재확인
 - 페이지네이션 중 일부 실패해도 이미 모은 결과는 보존(부분 실패 안전)
@@ -23,8 +33,9 @@
   사이버보안, 양자컴퓨팅
 
 ### 🌍 GDELT (해외 전담) — `gdelt_collector.py`
-- `gdeltdoc` 라이브러리로 영문 키워드 OR 검색, 최근 1일(`DAYS_BACK=1`, 일간 전환 부수효과로
-  TIMESPAN 창이 좁아져 크라우딩도 예전 7일 창보다 완화됨)
+- `gdeltdoc` 라이브러리로 영문 키워드 OR 검색. `Filters`에 상대값 `timespan` 대신
+  `start_date`/`end_date`(절대 날짜, 초 단위 정밀도)로 `window_start`/`window_end`를 직접
+  넘김 - 일간 전환 부수효과로 구간이 좁아져 크라우딩도 예전 7일 창보다 완화됨
 - 기본(fallback) 키워드: artificial intelligence, nvidia, semiconductor, chatgpt, openai
 - **적응형 배치 수집**: `BATCH_SIZE=5`로 묶어서 요청, 배치 결과가 정확히 상한
   (`MAX_RECORDS=250`)에 도달했을 때만 크라우딩으로 보고 그 배치 **전체**(원인 키워드 포함)를
@@ -57,7 +68,9 @@
 ## 2. 🧹 정규화 레이어
 
 - URL 기준 완전 동일 기사 제거(소스/키워드 무관하게 전역 dedup, `main.py normalize()`)
-- 24시간 초과 신선도 필터(`scorer.is_stale()`) — 상세는 3번 섹션 "24시간 초과 필터" 참고
+- 수집 구간(`window_start`~`window_end`) 밖 기사 필터(`scorer.is_in_window()`) — 상세는
+  3번 섹션 "수집 구간 필터" 참고. collector가 이미 이 구간으로 정확히 걸러서 수집하므로
+  정상 흐름에선 걸러질 게 없어야 정상 - 방어선(defense in depth) 역할
 
 ### 2.1 🧩 이슈 그룹핑 — `issue_grouper.py`
 - **1차**: KR↔EN 키워드 사전 매칭(`ISSUE_SYNONYM_GROUPS`, 현재는 비워둠 — 국가가 다른
@@ -121,13 +134,16 @@
   아직 언론사들이 못 받아써서 `mention_count`가 원래 낮은데 가중치까지 높게 받고,
   일찍 터져서 하루 종일 보도된(그래서 `mention_count`가 높은) 이슈는 가중치가 깎이는
   이중 왜곡. 그래서 가중치는 없애고 `mention_count`를 그대로 씀 — 신선도는 아래
-  "24시간 초과 필터"로 스코어링 이전에 걸러내는 쪽으로 분리
-- **24시간 초과 필터** — `main.py normalize()`가 `scorer.is_stale()`로 걸러냄
-  (`scorer.FRESHNESS_WINDOW_HOURS=24`). naver/gdelt가 "수집 시점 기준 24시간 이내"로
-  이미 거르는데도 또 필요한 이유: 수집 이후 관련성 필터/그룹핑/스코어링까지 시간이
-  더 흐르면서(파이프라인 총 소요 최대 355분) 수집 시점엔 24시간 안이었던 기사가 그
-  사이 넘길 수 있어서 — 정규화 직후(수집 바로 다음)로 최대한 앞당겨 걸러서 드리프트를
-  줄임. 걸러진 기사는 관련성 필터/그룹핑에도 안 들어가 LLM 호출도 그만큼 줄어듦
+  "수집 구간 필터"로 스코어링 이전에 걸러내는 쪽으로 분리
+- **수집 구간 필터** — `main.py normalize()`가 `scorer.is_in_window()`로 걸러냄. naver/gdelt가
+  이미 정확히 이 구간(`window_start`~`window_end`, "어제 00:00 KST ~ 오늘 00:00 KST")으로
+  걸러서 수집하므로 정상 흐름에선 여기서 걸러질 게 없어야 정상 - collector 로직 결함이나
+  향후 이 구간 필터를 안 지키는 새 소스가 추가되는 경우에 대비한 방어선(defense in depth).
+  (예전엔 "24시간 경과 여부"를 매번 계산하는 방식(`is_stale`)이었는데, naver/gdelt 각
+  collector가 호출 시점마다 따로 "지금부터 24시간 전"을 계산하다 보니 같은 실행 안에서도
+  키워드마다 절대 구간이 최대 몇 시간씩 밀리는 드리프트가 있었음 - 지금은 `main.py`가
+  파이프라인 시작 시점에 계산한 고정 구간을 collector/필터 양쪽에 동일하게 넘겨서 이
+  드리프트 자체가 사라짐. 1번 섹션 "수집 레이어" 도입부 참고)
 - `TOP_N=5`(국내/해외 각 축), `CATEGORY_TOP_N=1` — 둘 다 환경변수로 조정 가능
 - **4차 Top N 사후 재검토** — `issue_grouper.stage4_dedupe_and_promote()`. 최종 순위권
   후보끼리만(top_n개, 국내/해외 + 카테고리별 최대 18개 리스트 전부) 같은 사건인지 LLM으로
