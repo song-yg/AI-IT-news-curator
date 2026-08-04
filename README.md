@@ -216,24 +216,56 @@ OpenRouter 계정에 $10 크레딧을 1회 선결제해서 무료 모델 하루 
 
 ---
 
-## 🎛️ 오케스트레이션 — `main.py`
+## 🎛️ 오케스트레이션 — Job 체이닝(2-Job 구조)
 
-`run()`이 아래 순서로 각 단계를 개별 try/except로 감싸 실행합니다(한 단계가 예외로
-죽어도 이미 모은 데이터는 살려서 다음 단계로 진행):
+GitHub Actions Job 하나(최대 6시간, GitHub 인프라 자체의 캡)에 수집~배포를 전부 우겨넣던
+구조에서, **Job을 둘로 쪼개 각자 자기 몫의 6시간을 따로 쓰는 구조**로 전환했다
+(`run-pipline.yml` 참고):
 
-1. 수집(`run_collectors`) → 2. 정규화+태깅 → 2.5 관련성 필터 → 2.6 카테고리 재분류 →
-2.1 임베딩 모델 로드 → 3. 스코어링 → 3-보조 카테고리 집계 → 4. LLM 요약 →
-4-보조 카테고리별 LLM 요약 → 5. 저장 → 6. 배포
+- **collect Job** (`collect_stage.py`): `main.py`의 `_compute_collection_window()` +
+  `run_collectors()`를 그대로 재사용해 네이버+GDELT만 수집. 결과를 `collect_output/collected.json`
+  으로 저장하고 `actions/upload-artifact`로 올린 뒤 종료. `state/*.json`(GDELT 학습 상태)도
+  이 Job이 직접 커밋
+- **process Job** (`process_stage.py`): `needs: collect` + `if: always()`로 collect Job이
+  실패해도 항상 시도한다. `actions/download-artifact`로 결과를 이어받아 `main.py`의
+  `normalize()`/`score()`/`step4_llm_summary()` 등을 재사용해 정규화~배포를 실행하고
+  `data/`를 커밋
+
+`main.py`의 `run()` 자체는 그대로 남아있다 — 로컬에서 전체 파이프라인을 한 번에 테스트할
+땐 여전히 `python main.py`로 단일 프로세스 실행 가능(이 경우 아래 "단일 실행 시간예산" 표
+그대로 적용).
 
 - 수동 실행(`workflow_dispatch`)은 저장을 건너뜁니다 — "전일/7일 평균 대비 증감" 비교 기준이
   테스트 데이터로 오염되는 것을 방지하기 위함(콘솔 출력은 정상적으로 확인 가능)
 - `TOP_N`, `CATEGORY_TOP_N` 환경변수로 조정 가능(기본 5 / 1)
 
-### ⏱️ 파이프라인 시간예산 — 단계별 누적 체크포인트
+### ⏱️ Job 체이닝 시간예산
 
-GitHub Actions 잡 하드 캡(360분, GitHub 인프라 자체의 캡)을 넘기지 않도록, `main.py`가
-`run()` 시작 시점(0분)부터 아래 5개 구간이 끝나야 하는 누적 마감 시각(분)을 한 번에 계산해서
-해당 단계에 절대 시각(`deadline`, `time.monotonic()` 기준)으로 넘겨준다:
+| Job | 대상 | 예산 |
+|---|---|---|
+| collect | GDELT 수집(네이버 포함) | 이 Job 전체(360분, `COLLECT_TIME_BUDGET_SECONDS`) |
+| process | 관련성 필터 + 카테고리 재분류 | 이 Job 시작 후 240분(4시간, `RELEVANCE_TIME_BUDGET_SECONDS`) |
+| process | 이슈 그룹핑 1~3차 / 4차 재검토 / LLM 요약 | 무제한(`deadline=float("inf")`) |
+
+그룹핑~요약을 무제한으로 둔 건 `TOP_N`이 고정값이라 수집량과 무관하게 규모가 안 커져서
+상대적으로 안전하다고 판단했기 때문 - 관련성 필터/재분류만 수집량(최대 어제 하루치 전체)에
+비례해서 배치 수가 늘 수 있어 유일하게 예산을 남겨뒀다. `process_stage.py`가 각 단계에
+`deadline=None`이 아니라 `float("inf")`를 넘기는 이유: `None`을 넘기면 각 함수가
+"deadline 없을 때 쓰는 자기 모듈 기본값"(standalone 테스트용, 90분/120분 등)으로 폴백해
+사실상 예산이 생겨버리기 때문 - `inf`를 명시하면 그 폴백 없이 정말 무제한으로 돈다(각
+모듈 코드는 안 건드리고 호출부 값만 다르게 넘겨서 배분을 조정한 것).
+
+**collect Job이 실패해도 그날 발송이 통째로 없어지지 않는다** — `process` Job에
+`if: always()`가 걸려있어 collect Job의 성공 여부와 무관하게 항상 시도하고,
+`process_stage.py`가 `collected.json`이 없거나 손상된 경우 빈 기사로 안전하게 시작해서
+"오늘은 기사 0건"처럼 정상적으로 흘러간다(요약/저장/배포 각 단계의 기존 안전한 기본값이
+그대로 적용됨).
+
+### ⏱️ 단일 실행(`python main.py`) 시간예산 — 단계별 누적 체크포인트
+
+`main.py`를 로컬에서 통째로 한 번에 돌릴 때는 예전 방식 그대로, `run()` 시작 시점(0분)부터
+아래 5개 구간이 끝나야 하는 누적 마감 시각(분)을 한 번에 계산해서 해당 단계에 절대 시각
+(`deadline`, `time.monotonic()` 기준)으로 넘겨준다:
 
 | 구간 | 누적 체크포인트 | 구간 자체 소요 | 대상 |
 |---|---|---|---|
@@ -250,13 +282,9 @@ GitHub Actions 잡 하드 캡(360분, GitHub 인프라 자체의 캡)을 넘기�
 유지, 4차 재검토는 그 라운드부터 병합 중단하고 현재 순위 그대로, LLM 요약은 남은 이슈를
 "요약 생략, 원문 제목만 노출"로 처리.
 
-355분(위 표 총합) 기준으로 이 예산 추적 밖에 있는 단계들 — 체크아웃/디스크 정리/Python·
-의존성 설치/BGE-M3 캐시(추적 시작 *전*), 저장/배포/git 커밋·푸시(추적 종료 *후*) — 는
-360분 하드 캡에서 **5분**밖에 여유가 없다. 지금까지 실측으로는 문제없었지만 빠듯한 편이라,
-필요하면 위 체크포인트를 낮춰서 버퍼를 늘릴 수 있다(`main.py`의 `_CHECKPOINT_*_MIN` 상수).
-
 각 모듈의 자체 `TIME_BUDGET_SECONDS`류 상수는 `deadline`을 못 받았을 때(모듈 단독 테스트
-등)만 쓰는 fallback으로, 실제 운영에서는 위 체크포인트가 우선한다.
+등)만 쓰는 fallback으로, 실제 운영(Job 체이닝이든 단일 실행이든)에서는 호출부가 넘기는
+`deadline` 값이 항상 우선한다.
 
 ---
 
