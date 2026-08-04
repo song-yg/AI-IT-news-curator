@@ -236,7 +236,14 @@ def _save_crowding_state(state: dict, path: str = CROWDING_STATE_PATH) -> None:
 
 def _update_crowding_state_after_run() -> None:
     """
-    collect() 끝에서 호출 - 이번 실행 중 개별 요청 결과가 상한 근처였던 키워드들의 crowd_count를 1씩 올리고, 변경이 있었으면 파일에 저장한다.
+    collect() 끝에서 호출 - 이번 실행 중 개별 요청 결과가 상한 근처였던 키워드들의
+    crowd_count를 1씩 올리고, 변경이 있었으면 파일에 저장한다.
+
+    이미 CROWDING_STATE_LEARN_THRESHOLD에 도달한 키워드는 더 이상 올리지 않는다 -
+    한 번 학습형 크라우딩 목록에 등재되면 collect()가 그 키워드를 배치 단계 자체에서
+    건너뛰고 매번 개별 요청으로 보내므로("known_crowders" 분기 참고), 그 뒤로도 계속
+    상한에 걸리는 건 "여전히 크다"는 걸 재확인하는 것뿐이지 판정 자체는 이미 끝난
+    상태라 카운트를 더 올릴 실익이 없다(오히려 last_seen만 갱신하면 충분).
     """
     if not _crowded_keywords_this_run:
         return
@@ -247,12 +254,13 @@ def _update_crowding_state_after_run() -> None:
         entry = state.get(keyword)
         if not isinstance(entry, dict):
             entry = {"crowd_count": 0}  # 없거나(신규) 손상된 값이면 새로 시작
-        entry["crowd_count"] = entry.get("crowd_count", 0) + 1
+        if entry.get("crowd_count", 0) < CROWDING_STATE_LEARN_THRESHOLD:
+            entry["crowd_count"] = entry.get("crowd_count", 0) + 1
+            if entry["crowd_count"] >= CROWDING_STATE_LEARN_THRESHOLD:
+                print(f"[gdelt] '{keyword}' - {entry['crowd_count']}회 연속 상한 근처 확인됨 "
+                      f"(임계값 {CROWDING_STATE_LEARN_THRESHOLD}) - 다음 실행부터 배치 없이 바로 개별 요청으로 처리")
         entry["last_seen"] = now_str
         state[keyword] = entry
-        if entry["crowd_count"] >= CROWDING_STATE_LEARN_THRESHOLD:
-            print(f"[gdelt] '{keyword}' - {entry['crowd_count']}회 연속 상한 근처 확인됨 "
-                  f"(임계값 {CROWDING_STATE_LEARN_THRESHOLD}) - 다음 실행부터 배치 없이 바로 개별 요청으로 처리")
 
     _save_crowding_state(state)
 
