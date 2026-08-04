@@ -55,8 +55,8 @@ PRESS_DEDUP_CAP = 3  # 언론사당 그룹 내 최대 카운트 (잠정값, 미�
 
 def _press_of(article: dict) -> str:
     """
-    언론사 식별자. naver/gdelt는 "press"(도메인) 필드가 있고, WATT는 없는 대신
-    "source"(예: "WATTAgNet")가 사실상 언론사 역할이라 이를 대체값으로 씀.
+    언론사 식별자. naver/gdelt 둘 다 "press"(도메인) 필드를 채워 넘기므로 보통 이 값을
+    쓴다 - "source"는 press가 비어있는 예외적인 경우에만 쓰는 대체값(방어적 fallback).
     """
     return article.get("press") or article.get("source") or "(미상)"
 
@@ -164,7 +164,7 @@ def _is_korean_gdelt_article(article: dict) -> bool:
 
 def split_domestic_international(articles: list[dict]) -> tuple[list[dict], list[dict]]:
     """
-    국내/해외 집계 축 분리. 네이버=국내, WATT/GDELT=해외.
+    국내/해외 집계 축 분리. 네이버=국내, GDELT=해외가 기본.
     GDELT로 수집됐지만 실제로 한국어 기사면 "국내"로 재분류 (_is_korean_gdelt_article 참고).
     """
     domestic = []

@@ -166,15 +166,21 @@ SIMILARITY_DEBUG_CSV = (os.environ.get("SIMILARITY_DEBUG_CSV") or "").strip().lo
 
 def _embedding_text(article: dict) -> str:
     """
-    임베딩에 넣을 텍스트를 만든다 - "제목 + 있으면 본문 요약 일부".
-    본문(body)이 있는 소스(WATT)는 앞부분 200자만 덧붙인다 - 본문 전체를
-    넣으면 계산량만 늘고, 어차피 "같은 이슈인지" 판단엔 도입부만으로 충분한
-    경우가 대부분이라 짧게 자른다.
+    임베딩에 넣을 텍스트를 만든다 - "제목 + 있으면 본문/설명 일부".
+
+    이 프로젝트의 두 소스(네이버/GDELT) 중 실제로 값이 있는 건 네이버의 description뿐이다
+    (body는 두 소스 다 항상 None - naver_collector.py/gdelt_collector.py 참고, GDELT는 API
+    스펙에 명시된 그대로 본문 미제공). body를 우선하고 없으면 description을 쓰도록 해서,
+    네이버 기사는 제목만이 아니라 description까지 반영해 2차 매칭 정확도를 높인다 - GDELT는
+    어차피 둘 다 없어 제목만 쓰는 것과 동일.
+
+    앞부분 200자만 덧붙이는 이유: 본문 전체를 넣으면 계산량만 늘고, 어차피 "같은 이슈인지"
+    판단엔 도입부만으로 충분한 경우가 대부분이라 짧게 자른다.
     """
     title = article.get("title", "")
-    body = article.get("body")
-    if body:
-        return f"{title} {body[:200]}"
+    material = article.get("body") or article.get("description")
+    if material:
+        return f"{title} {material[:200]}"
     return title
 
 

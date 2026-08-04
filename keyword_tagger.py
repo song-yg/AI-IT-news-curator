@@ -105,9 +105,11 @@ def tag_articles(articles: list[dict]) -> list[dict]:
     """
     기사 리스트 전체에 카테고리를 매김 (in-place로 "category" 필드 채움).
 
-    WATT_collector는 사이트 자체 분류(예: "Poultry")를 이미 "category"에 채워서 넘기지만,
-    이 함수는 소스 상관없이 우리 시스템 통일 카테고리 체계로 덮어쓴다.
-    정보 손실 방지를 위해 WATT의 원래 값은 "site_category"에 별도 보존.
+    이 함수는 소스 상관없이 우리 시스템 통일 카테고리 체계로 "category"를 덮어쓴다.
+    네이버/GDELT가 아닌 소스가 나중에 추가되고 그 소스가 자체 분류(예: "Poultry")를 이미
+    "category"에 채워서 넘기는 경우를 대비해, 원래 값은 정보 손실 없이 "site_category"에
+    별도 보존해두는 조건도 남겨둠 - 지금은 실제로 그런 소스가 없어(네이버/GDELT뿐) 이
+    분기가 항상 미실행 상태.
     """
     other_count = 0
     for article in articles:
