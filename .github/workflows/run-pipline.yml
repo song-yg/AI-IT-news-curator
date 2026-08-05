@@ -186,8 +186,14 @@ jobs:
       - name: 파이썬 의존성 설치
         run: pip install -r requirements.txt --no-cache-dir
 
-      - name: apt 캐시 정리 + 설치 후 디스크 사용량 확인
+      - name: 한글 폰트(fonts-nanum) 설치 + apt 캐시 정리 + 설치 후 디스크 사용량 확인
+        # category_chart.py가 matplotlib으로 카테고리별 7일 추이 그래프를 그리는데, 이
+        # 러너엔 한글 폰트가 기본 설치돼 있지 않아 카테고리명이 네모(tofu)로 깨져 나온다 -
+        # fonts-nanum을 깔아두면 category_chart._find_korean_font()가 찾아서 쓴다.
         run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends fonts-nanum
+          fc-cache -f
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/*
           echo "의존성 설치 후 디스크 사용량:"

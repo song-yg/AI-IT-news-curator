@@ -39,6 +39,7 @@ import issue_grouper
 import llm_summarizer
 import keyword_tagger
 import category_aggregator
+import category_chart
 import relevance_filter
 import storage
 import deploy
@@ -509,6 +510,15 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
               f"{type(e).__name__} - {e!r}")
         category_distribution, category_comparison = {}, None
 
+    # 최근 7일(오늘 포함) 카테고리별 증감 그래프 - category_distribution이 있어야(오늘 몫)
+    # 그릴 수 있어서 위 집계 바로 다음, [5] 저장으로 아직 파일화되기 전에 생성한다.
+    try:
+        category_charts = category_chart.generate_charts(category_distribution)
+    except Exception as e:
+        print(f"[main] 🔴 조치필요 [MN-11] - 카테고리 추이 그래프 단계에서 예상 못 한 오류 발생 - 그래프 없이 진행: "
+              f"{type(e).__name__} - {e!r}")
+        category_charts = {}
+
     print("\n=== [4] 국내/해외 LLM 요약 생성 ===")
     try:
         domestic_summarized, international_summarized = step4_llm_summary(
@@ -516,7 +526,7 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
         llm_summarizer.print_summaries("국내", domestic_summarized)
         llm_summarizer.print_summaries("해외", international_summarized)
     except Exception as e:
-        print(f"[main] 🔴 조치필요 [MN-11] - [4] LLM 요약 단계에서 예상 못 한 오류 발생 - 요약 없이(원문 제목만) 진행: "
+        print(f"[main] 🔴 조치필요 [MN-12] - [4] LLM 요약 단계에서 예상 못 한 오류 발생 - 요약 없이(원문 제목만) 진행: "
               f"{type(e).__name__} - {e!r}")
         domestic_summarized, international_summarized = domestic_ranked, international_ranked
 
@@ -529,7 +539,7 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
         for category, items in international_category_summarized.items():
             llm_summarizer.print_summaries(f"해외-{category}", items)
     except Exception as e:
-        print(f"[main] 🔴 조치필요 [MN-12] - [4-보조] 카테고리별 LLM 요약 단계에서 예상 못 한 오류 발생 - 요약 없이(원문 제목만) 진행: "
+        print(f"[main] 🔴 조치필요 [MN-13] - [4-보조] 카테고리별 LLM 요약 단계에서 예상 못 한 오류 발생 - 요약 없이(원문 제목만) 진행: "
               f"{type(e).__name__} - {e!r}")
         domestic_category_summarized, international_category_summarized = (
             domestic_category_ranked, international_category_ranked)
@@ -550,7 +560,7 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
                                           gdelt_timeline, failed_sources, category_distribution,
                                           category_comparison)
         except Exception as e:
-            print(f"[main] 🔴 조치필요 [MN-13] - 저장 단계에서 예상 못 한 오류 발생(콘솔 로그의 결과는 그대로 유효함): "
+            print(f"[main] 🔴 조치필요 [MN-14] - 저장 단계에서 예상 못 한 오류 발생(콘솔 로그의 결과는 그대로 유효함): "
                   f"{type(e).__name__} - {e!r}")
             saved_dir = None
     # [2]~[5]까지 발생한 🔴 조치필요 코드 회수 + 수집 단계(있으면) 몫과 합치기
@@ -563,14 +573,14 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
         day_label = os.path.basename(saved_dir) if saved_dir else datetime.now(timezone.utc).strftime("%Y-%m-%d")
         deploy.send_daily_email(day_label, domestic_summarized, international_summarized,
                                  domestic_category_summarized, international_category_summarized,
-                                 failed_sources, category_comparison, all_error_codes)
+                                 failed_sources, category_comparison, all_error_codes, category_charts)
     except Exception as e:
-        print(f"[main] 🔴 조치필요 [MN-14] - 배포 단계에서 예상 못 한 오류 발생(콘솔 로그의 결과는 그대로 유효함): "
+        print(f"[main] 🔴 조치필요 [MN-15] - 배포 단계에서 예상 못 한 오류 발생(콘솔 로그의 결과는 그대로 유효함): "
               f"{type(e).__name__} - {e!r}")
 
     if failed_sources:
         saved_dir_note = f"{saved_dir}/scored.json에도" if saved_dir else "(data/ 파일에는 안 남았지만)"
-        print(f"\n[main] 🔴 조치필요 [MN-15] - 이번 실행 실패 소스: {failed_sources} "
+        print(f"\n[main] 🔴 조치필요 [MN-16] - 이번 실행 실패 소스: {failed_sources} "
               f"({saved_dir_note} failed_sources로 같이 저장됨)")
 
 

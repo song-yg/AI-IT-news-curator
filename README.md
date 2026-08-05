@@ -96,7 +96,9 @@
 - 임베딩 모델 로드 실패 시 1차 결과만으로 안전하게 fallback
 
 ### 2.2 🏷️ 키워드 태깅 — `keyword_tagger.py`
-`CATEGORY_KEYWORDS` 기준으로 카테고리를 부여합니다:
+`CATEGORY_KEYWORDS` 기준으로 카테고리를 부여합니다. 구글 시트(`KEYWORD_SHEET_CSV_URL`,
+naver/gdelt 키워드와 같은 시트)의 **category 열**에서 읽어오고(`keyword_source.get_category_keywords()`),
+시트에 그 열이 없거나 읽기 실패하면 아래 표(`_FALLBACK_CATEGORY_KEYWORDS`)로 안전하게 대체:
 
 | 카테고리 | 국문 키워드 | 영문 키워드 |
 |---|---|---|
@@ -240,6 +242,20 @@ OpenRouter 계정에 $10 크레딧을 1회 선결제해서 무료 모델 하루 
 - 인증정보 미설정 시 발송만 안전하게 생략(파이프라인은 안 죽음)
 - 이슈별 🔗 교차 매칭 표시도 이메일 본문에 포함
 - 이메일 클라이언트(특히 아웃룩)의 렌더링 제약을 고려해 인라인 스타일 + `<table>` 위주로 구성
+- **카테고리별 최근 7일 추이 그래프** — `category_chart.py`가 만든 국내/해외 꺾은선 그래프
+  (PNG, base64 인코딩)를 `<img src="data:image/png;base64,...">`로 직접 삽입(외부 이미지
+  URL 방식은 이메일 클라이언트가 로드를 차단하는 경우가 많아서 안 씀). 오늘(발송일) 포함
+  7일 - 과거 6일은 `data/YYYY-MM-DD/scored.json`에서, 오늘 몫은 아직 파일로 저장되기 전
+  메모리 값을 그대로 씀. matplotlib 미설치/렌더링 실패/데이터 없음 등 어떤 이유로든 못
+  그리면 그 축만(또는 섹션 전체) 조용히 생략. 한글 폰트는 GH Actions 러너에 기본 설치가
+  안 돼 있어 `run-pipline.yml`의 process Job에 `fonts-nanum` 설치 스텝을 추가해뒀음 - 못
+  찾으면 경고 로그만 남기고 기본 폰트로 계속 진행(카테고리명이 깨져 보일 수 있음). PDF는
+  안 만듦 - 이메일에 바로 보이는 게 목적이라 불필요한 스텝
+- **오류 코드 푸터** — `error_log.py`가 stdout에서 "🔴 조치필요 [XX-NN]" 패턴만 정규식으로
+  수집(수십 곳의 print 호출부는 안 건드림). collect Job의 코드는 `collected.json`에 실어
+  process Job으로 전달, 최종 병합 리스트를 이메일 맨 아래 9px 연한 회색으로 코드만(상세
+  메시지 없이) 표시 - 운영자가 훑어보다 뭔가 있었는지만 눈치채면 되는 용도라 본문
+  가독성을 해치지 않게 최대한 눈에 안 띄게 둠
 
 ---
 

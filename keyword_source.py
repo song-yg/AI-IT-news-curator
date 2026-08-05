@@ -5,10 +5,13 @@ keyword_source.py
 시트를 "웹에 게시(CSV)"해두면 인증 없이 GET으로 읽을 수 있어서,
 코드 배포/GitHub 권한 없이 구글 시트 편집 권한만으로 키워드를 추가/수정할 수 있다.
 
-시트 형식 (컬럼: keyword, lang, active, note):
+시트 형식 (컬럼: keyword, lang, active, category, note):
   - keyword: 검색어 (naver_collector는 ko 행, gdelt_collector는 en 행을 사용)
   - lang: "ko" 또는 "en"
   - active: TRUE/FALSE (행 삭제 대신 켜고 끄기용 - 실수로 지워서 이력이 사라지는 것 방지)
+  - category: keyword_tagger.py가 기사 카테고리 분류에 쓰는 카테고리명(예: "질병명"). 비어있으면
+    그 키워드는 카테고리 분류에서 제외(검색용으로만 씀) - keyword/lang/active와 별개 목적이라
+    없어도 get_keywords()에는 영향 없음.
   - note: 사람이 보는 메모, 코드는 안 읽음
 
 실패 시(URL 없음/네트워크 실패/형식 깨짐/해당 lang 활성 키워드 없음) 호출부가 넘긴
@@ -136,3 +139,41 @@ def get_keywords(lang: str, fallback: list[str]) -> list[str]:
 
     print(f"[keyword_source] 구글 시트에서 {lang} 키워드 {len(keywords)}개 로드: {keywords}")
     return keywords
+
+
+def get_category_keywords(fallback: dict[str, dict[str, list[str]]]) -> dict[str, dict[str, list[str]]]:
+    """
+    구글 시트의 category 컬럼으로 {카테고리: {"kr": [...], "en": [...]}} 사전을 만든다
+    (keyword_tagger.CATEGORY_KEYWORDS와 동일한 형태) - get_keywords()와 같은 시트/캐시를
+    재사용하되, active 여부/키워드 유효성 검증은 그대로 적용하고 lang 판별은 실제 글자
+    구성 기준(_detect_keyword_lang)으로 한다(시트 lang 컬럼 오기재에 안 흔들리게).
+
+    URL 없음/읽기 실패/category 값이 있는 행이 하나도 없음(구버전 시트 등) -> fallback 반환.
+    """
+    csv_url = os.environ.get("KEYWORD_SHEET_CSV_URL")
+    if not csv_url:
+        print("[keyword_source] 🔴 조치필요 [KS-08] - KEYWORD_SHEET_CSV_URL 없음 - 기본(하드코딩) 카테고리 키워드 사전 사용")
+        return fallback
+
+    rows = _fetch_csv_rows(csv_url)
+    if rows is None:
+        return fallback
+
+    result: dict[str, dict[str, list[str]]] = {}
+    for row in rows:
+        keyword = row.get("keyword", "").strip()
+        category = row.get("category", "").strip()
+        if not keyword or not category or not _is_active(row) or not _is_valid_keyword(keyword):
+            continue
+        lang_key = "kr" if _detect_keyword_lang(keyword) == "ko" else "en"
+        result.setdefault(category, {"kr": [], "en": []})
+        if keyword not in result[category][lang_key]:  # 같은 카테고리에 중복 등록된 키워드만 방지(다른 카테고리 중복은 허용 - 의도된 사용일 수 있음)
+            result[category][lang_key].append(keyword)
+
+    if not result:
+        print("[keyword_source] 🟡 주의 [KS-09] - 시트에 category 값이 있는 활성 키워드가 하나도 없음 - "
+              "기본(하드코딩) 카테고리 키워드 사전 사용")
+        return fallback
+
+    print(f"[keyword_source] 구글 시트에서 카테고리 {len(result)}개 로드: {list(result.keys())}")
+    return result

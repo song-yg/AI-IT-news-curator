@@ -226,7 +226,8 @@ def render_email_html(day_label: str, domestic_summarized: list[dict], internati
                        international_by_category: dict[str, list[dict]],
                        failed_sources: list[str],
                        category_comparison: dict[str, dict[str, dict]] | None = None,
-                       error_codes: list[str] | None = None) -> str:
+                       error_codes: list[str] | None = None,
+                       category_charts: dict[str, str] | None = None) -> str:
     """
     scored.json 데이터로 이메일 본문 HTML 생성. 폭 1000px, 옅은 회색 배경 위
     흰색 콘텐츠 카드, 국내/해외 좌우 2단 레이아웃.
@@ -235,6 +236,10 @@ def render_email_html(day_label: str, domestic_summarized: list[dict], internati
     자동 수집, 중복 제거·등장 순서). 자세한 메시지 없이 코드만, 맨 아래 아주 작은 글씨로 표시 -
     운영자가 훑어보다가 뭔가 있었는지만 눈치채면 되는 용도라 본문 가독성을 해치지 않게
     최대한 눈에 안 띄게 둔다.
+
+    category_charts: {"국내"/"해외": base64 PNG 문자열}(category_chart.generate_charts() 참고) -
+    <img src="data:image/png;base64,...">로 그대로 삽입. 축 하나만 있어도 그 축만 표시,
+    아예 없으면(matplotlib 미설치 등) 이 섹션 자체를 생략.
     """
     header_html = f"""
     <div style="background:{HEADER_BG}; padding:26px 32px; border-radius:10px 10px 0 0;">
@@ -261,6 +266,15 @@ def render_email_html(day_label: str, domestic_summarized: list[dict], internati
             _format_category_comparison_axis_html(category_comparison.get("국내"), DOMESTIC_ACCENT),
             _format_category_comparison_axis_html(category_comparison.get("해외"), INTERNATIONAL_ACCENT),
         ))
+
+    if category_charts:
+        parts.append(section_header("카테고리별 최근 7일 추이"))
+        chart_cell = lambda axis: (
+            f'<img src="data:image/png;base64,{category_charts[axis]}" '
+            f'style="width:100%; max-width:480px; height:auto; display:block;" alt="{axis} 카테고리 추이">'
+            if axis in category_charts else '<p style="font-size:13px; color:#999; margin:4px 0;">(그래프 없음)</p>'
+        )
+        parts.append(_two_column_table(chart_cell("국내"), chart_cell("해외")))
 
     parts.append(section_header("오늘의 Top 이슈"))
     parts.append(_two_column_table(
@@ -330,12 +344,15 @@ def send_daily_email(day_label: str, domestic_summarized: list[dict], internatio
                       international_by_category: dict[str, list[dict]],
                       failed_sources: list[str],
                       category_comparison: dict[str, dict[str, dict]] | None = None,
-                      error_codes: list[str] | None = None) -> bool:
+                      error_codes: list[str] | None = None,
+                      category_charts: dict[str, str] | None = None) -> bool:
     """
     main.py에서 부르는 단일 진입점. GitHub Secrets에서 인증정보를 읽고, 없으면 안전하게 생략.
     day_label은 main.py의 YYYY-MM-DD 형식 그대로 받는다.
 
     error_codes: render_email_html()에 그대로 전달 - 이메일 하단에 눈에 안 띄게 표시.
+    category_charts: render_email_html()에 그대로 전달 - {"국내"/"해외": base64 PNG} 형태
+    (category_chart.generate_charts() 참고), 없는 축은 그 섹션 생략.
     """
     smtp_user = os.environ.get("SMTP_USER")
     smtp_app_password = os.environ.get("SMTP_APP_PASSWORD")
@@ -355,7 +372,7 @@ def send_daily_email(day_label: str, domestic_summarized: list[dict], internatio
 
     html_content = render_email_html(day_label, domestic_summarized, international_summarized,
                                       domestic_by_category, international_by_category, failed_sources,
-                                      category_comparison, error_codes)
+                                      category_comparison, error_codes, category_charts)
     day_label_human = _humanize_day_label(day_label)
     subject = f"[AI·IT 뉴스] {day_label_human} 일간 큐레이션"
     return send_email(html_content, subject, recipients, smtp_user, smtp_app_password)

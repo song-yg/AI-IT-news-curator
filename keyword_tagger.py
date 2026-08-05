@@ -7,15 +7,20 @@ keyword_tagger.py
   - 이슈 그룹핑: "같은 사건인가" (BGE-M3 임베딩)
   - 키워드 태깅(이 모듈): "어떤 카테고리(질병/가격/제도 등)인가"
 
-lang 열 보정: 원본 표에서 로봇공학·기타 IT 기술 행들의 키워드가 한글인데 lang="en"으로
-잘못 표시돼 있었다. 매칭 로직 자체는 kr/en을 합쳐서 쓰므로 결과에는 영향 없지만, 문서/유지보수
-목적으로 실제 문자 구성(한글->kr, 로마자->en) 기준으로 재배치했다 ("nvidia"도 en으로 이동).
+** CATEGORY_KEYWORDS 출처: 구글 시트의 category 컬럼 **
+keyword_source.get_category_keywords()로 naver/gdelt 키워드와 같은 시트에서 읽어온다 -
+시트에 category 컬럼이 없거나(구버전 스키마) 읽기 실패 시 _FALLBACK_CATEGORY_KEYWORDS로
+안전하게 대체. tag_articles() 시작 시 한 번 갱신하므로, 그 이후 실행되는 다른 모듈
+(relevance_filter.py의 카테고리 재분류 등)은 항상 갱신된 값을 본다(파이프라인 순서 의존 -
+정규화가 항상 관련성 필터/재분류보다 먼저 실행되므로 안전).
 """
 
 import re
 from collections import Counter
 
-CATEGORY_KEYWORDS = {
+import keyword_source
+
+_FALLBACK_CATEGORY_KEYWORDS = {
     "인공지능": {
         "kr": ['인공지능', 'AI', '머신러닝', '딥러닝', '챗GPT', '생성형 AI', '빅데이터'],
         "en": ['Artificial intelligence'],
@@ -36,11 +41,14 @@ CATEGORY_KEYWORDS = {
 
 EXCLUDED_TERMS: set[str] = set()
 
+# 모듈 로드 시점엔 fallback으로 시작 - tag_articles()가 구글 시트에서 다시 읽어 갱신한다.
+CATEGORY_KEYWORDS = _FALLBACK_CATEGORY_KEYWORDS
 
-def _build_flat_index():
-    """{카테고리: [(소문자 토큰, 원본 토큰)]} 형태로 평탄화 (모듈 로드 시 1회만 계산)."""
+
+def _build_flat_index(category_keywords: dict) -> dict:
+    """{카테고리: [(소문자 토큰, 원본 토큰)]} 형태로 평탄화."""
     index = {}
-    for category, terms in CATEGORY_KEYWORDS.items():
+    for category, terms in category_keywords.items():
         flat = []
         for term in terms["kr"] + terms["en"]:
             if term in EXCLUDED_TERMS:
@@ -50,7 +58,14 @@ def _build_flat_index():
     return index
 
 
-_FLAT_INDEX = _build_flat_index()
+_FLAT_INDEX = _build_flat_index(CATEGORY_KEYWORDS)
+
+
+def _refresh_category_keywords() -> None:
+    """구글 시트의 category 컬럼으로 CATEGORY_KEYWORDS/_FLAT_INDEX를 다시 만든다. tag_articles() 시작 시 1회 호출."""
+    global CATEGORY_KEYWORDS, _FLAT_INDEX
+    CATEGORY_KEYWORDS = keyword_source.get_category_keywords(_FALLBACK_CATEGORY_KEYWORDS)
+    _FLAT_INDEX = _build_flat_index(CATEGORY_KEYWORDS)
 
 
 def _dedupe_contained(terms: list[str]) -> list[str]:
@@ -112,6 +127,7 @@ def tag_articles(articles: list[dict]) -> list[dict]:
     분기가 항상 미실행 상태.
     """
     other_count = 0
+    _refresh_category_keywords()
     for article in articles:
         original_category = article.get("category")
         if original_category and article.get("source") not in ("네이버", "GDELT"):

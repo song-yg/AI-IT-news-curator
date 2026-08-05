@@ -11,13 +11,20 @@ import json
 import os
 from collections import Counter
 
-from keyword_tagger import CATEGORY_KEYWORDS
+import keyword_tagger
 import scorer
 import storage
 
 
-# 출력 순서 고정용 (실행마다 안 흔들리게)
-_CATEGORY_ORDER = list(CATEGORY_KEYWORDS.keys()) + ["기타"]
+def _category_order() -> list[str]:
+    """
+    출력 순서 고정용. keyword_tagger.CATEGORY_KEYWORDS를 매 호출마다 새로 읽는다 - 이 값은
+    tag_articles()가 구글 시트 category 컬럼으로 갱신하므로(keyword_tagger.py 참고), 모듈
+    import 시점에 `from keyword_tagger import CATEGORY_KEYWORDS`로 값을 고정해버리면 그
+    갱신을 못 보고 옛 fallback 카테고리로만 출력되는 문제가 있었다 - 그래서 매번 함수로
+    다시 계산한다.
+    """
+    return list(keyword_tagger.CATEGORY_KEYWORDS.keys()) + ["기타"]
 
 
 def count_by_category(articles: list[dict]) -> Counter:
@@ -43,7 +50,7 @@ def print_aggregate(aggregated: dict[str, Counter]) -> None:
         if total == 0:
             print("  (기사 없음)")
             continue
-        for category in _CATEGORY_ORDER:
+        for category in _category_order():
             count = counter.get(category, 0)
             if count == 0:
                 continue
@@ -214,7 +221,7 @@ def print_aggregate_with_history(aggregated: dict[str, Counter],
             print("  (기사 없음)")
             continue
         axis_comparison = None if comparison is None else comparison.get(axis, {})
-        for category in _CATEGORY_ORDER:
+        for category in _category_order():
             count = counter.get(category, 0)
             if count == 0:
                 continue

@@ -7,3 +7,4 @@ beautifulsoup4
 gdeltdoc
 sentence-transformers
 trafilatura
+matplotlib  # category_chart.py - 최근 7일 카테고리별 증감 꺾은선 그래프(이메일 삽입용 PNG)
