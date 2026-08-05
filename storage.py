@@ -1,18 +1,4 @@
-"""
-storage.py - 5단계 저장 레이어.
-
-data/YYYY-MM-DD/ 아래에 raw.json / scored.json / summary.md 세 파일을 저장한다.
-main.py의 run() 마지막 단계에서 save_day()를 호출한다.
-(예전엔 data/YYYY-WW/ 주차 디렉토리였음 - 일간 전환하면서 날짜 디렉토리로 변경.
-과거 주차 아카이브는 그대로 리포에 남아있지만 새 실행은 더 이상 참조하지 않음.)
-
-** 저장 방식: repo 커밋 (Actions 아티팩트 아님) **
-- category_aggregator의 "전일/7일 평균 대비 증감"이 다음 실행 시점에도 checkout된 리포에서
-  과거 데이터를 읽어야 하는데, 아티팩트는 보존 기간 후 사라져서 이 용도에 안 맞음
-- data/ 자체가 "매일 큐레이션 결과 아카이브"라는 취지에도 리포 히스토리가 자연스러움
-run-pipline.yml에 git commit/push 스텝 추가로 반영 (이 모듈은 파일 생성까지만, 커밋/푸시는
-워크플로 책임 - 로컬 실행 시에도 파일까지는 정상 생성됨).
-"""
+"""storage.py - data/YYYY-MM-DD/에 raw.json/scored.json/summary.md 저장(repo 커밋, git push는 워크플로 책임)."""
 
 import json
 import os
@@ -20,32 +6,20 @@ from datetime import datetime, timedelta, timezone
 
 
 def previous_day_dir(base_dir: str = "data", reference: datetime | None = None) -> str:
-    """
-    전일의 'data/YYYY-MM-DD' 경로 계산만 함("전일 대비 증감"용) - day_dir()과 달리
-    디렉토리를 만들지 않는 읽기 전용 조회.
-    """
+    """전일의 data/YYYY-MM-DD 경로(읽기 전용, 생성 안 함)."""
     now = reference or datetime.now(timezone.utc)
     yesterday = now - timedelta(days=1)
     return os.path.join(base_dir, yesterday.strftime("%Y-%m-%d"))
 
 
 def previous_n_days_dirs(n: int = 7, base_dir: str = "data", reference: datetime | None = None) -> list[str]:
-    """
-    오늘을 제외한 최근 n일의 'data/YYYY-MM-DD' 경로 리스트("7일 평균 대비 증감"용) -
-    day_dir()과 달리 디렉토리를 만들지 않는 읽기 전용 조회. 존재 여부는 호출부가 확인한다
-    (일간 전환 직후에는 과거 날짜 디렉토리가 없는 게 정상).
-    """
+    """오늘 제외 최근 n일의 data/YYYY-MM-DD 경로 리스트(읽기 전용, 존재 여부는 호출부가 확인)."""
     now = reference or datetime.now(timezone.utc)
     return [os.path.join(base_dir, (now - timedelta(days=i)).strftime("%Y-%m-%d")) for i in range(1, n + 1)]
 
 
 def day_dir(base_dir: str = "data", reference: datetime | None = None) -> str | None:
-    """
-    오늘 날짜 기준 'data/YYYY-MM-DD' 경로를 만들고(없으면 생성) 반환.
-
-    디렉토리 생성 실패 시(권한/디스크 등) 예외를 던지는 대신 로그 남기고 None 반환
-      - 호출부(save_day)가 저장 전체를 건너뛸 수 있게 함 (이미 끝난 수집/스코어링/요약 결과까지 날리면 안 됨).
-    """
+    """오늘 날짜 기준 data/YYYY-MM-DD 경로를 만들고 반환. 생성 실패 시 None."""
     now = reference or datetime.now(timezone.utc)
     path = os.path.join(base_dir, now.strftime("%Y-%m-%d"))
     try:
@@ -57,9 +31,6 @@ def day_dir(base_dir: str = "data", reference: datetime | None = None) -> str | 
 
 
 def _strip_body(article: dict) -> dict:
-    # "_cross_axis_partner"는 main.py의 score()가 국내/해외 교차 매칭 표시를
-    # scorer.score_group()에 넘기려고 붙이는 내부용 임시 필드라 raw.json엔 불필요.
-    # 정식 결과는 scored.json의 cross_axis_partner로 이미 승격돼 저장됨(save_scored 참고).
     return {k: v for k, v in article.items() if k not in ("body", "_cross_axis_partner")}
 
 
@@ -68,13 +39,7 @@ def _strip_scored_item(item: dict) -> dict:
 
 
 def save_raw(directory: str, articles: list[dict]) -> str | None:
-    """
-    관련성 필터까지 통과해 실제 스코어링에 쓰인 기사 전체를 raw.json으로 저장한다.
-    "raw"지만 수집 직후 원본이 아니라 "이번 주 분석에 실제로 쓰인 최종 데이터셋"이라는 의미.
-    필터링 전 원본은 지금은 안 남김 (필요해지면 raw_unfiltered.json 등으로 추후 분리 가능).
-
-    파일 쓰기 실패 시 예외 대신 로그+None 반환 (이 시점엔 이미 수집/스코어링/요약이 끝난 뒤라, 저장 하나 실패했다고 전체를 죽여서 콘솔 결과 확인 기회까지 뺏으면 안 됨).
-    """
+    """관련성 필터까지 통과한 최종 기사 전체를 raw.json으로 저장."""
     cleaned = [_strip_body(a) for a in articles]
     path = os.path.join(directory, "raw.json")
     try:
@@ -93,17 +58,7 @@ def save_scored(directory: str, domestic_summarized: list[dict],
                  international_by_category: dict[str, list[dict]],
                  gdelt_timeline: dict, failed_sources: list[str],
                  category_distribution: dict) -> str | None:
-    """
-    스코어링+요약 결과, 카테고리 집계, 실패 소스, GDELT 시계열을 scored.json 하나로 저장.
-
-    category_distribution을 저장해두는 이유(category_aggregator.py 참고): 다음 날 "전일/7일 평균 대비 증감" 계산에 이번 날 집계가 필요하기 때문.
-
-    domestic/international_by_category(카테고리별 Top N)도 같이 저장.
-    scorer.score_by_category가 이미 각 항목에 category 필드를 남겨둬서 그대로 저장만 하면 됨.
-    category_distribution(단순 개수 집계)과 이름이 헷갈리지 않게 별도 키로 구분.
-
-    save_raw와 동일하게 파일 쓰기 실패를 로그+None으로 흡수.
-    """
+    """스코어링+요약 결과, 카테고리 집계, 실패 소스, GDELT 시계열을 scored.json으로 저장."""
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "domestic": [_strip_scored_item(item) for item in domestic_summarized],
@@ -139,7 +94,6 @@ def _format_issue_section(item: dict) -> str:
     display_title = title_ko or rep_title
     lines = [f"### {display_title}"]
     if title_ko and title_ko != rep_title:
-        # 번역된 경우 원문도 작게 남겨둠 - 검색/원문 대조용(예: 해외 기사 원제)
         lines.append(f"*원문: {rep_title}*")
     lines.append(
         f"- 언급 {item.get('mention_count', 0)}건"
@@ -162,7 +116,6 @@ def _format_issue_section(item: dict) -> str:
 
 
 def _format_category_sections(by_category: dict[str, list[dict]]) -> list[str]:
-    """카테고리별 Top N을 summary.md용 마크다운 줄 리스트로 만든다."""
     lines = []
     for category, items in by_category.items():
         lines.append(f"\n#### {category}")
@@ -173,16 +126,7 @@ def _format_category_sections(by_category: dict[str, list[dict]]) -> list[str]:
 
 
 def _format_category_comparison_section(category_comparison: dict[str, dict[str, dict]] | None) -> list[str]:
-    """
-    카테고리별 전일 대비 + 7일 평균 대비 증감을 마크다운 줄 리스트로 만든다. 이슈 목록보다 앞,
-    문서 맨 앞부분에 배치해서 "이번 날 큰 흐름"을 먼저 보여주는 구성.
-    None(비교할 과거 데이터가 하나도 없음 - 일간 전환 직후 등)이면 빈 리스트 반환(섹션 자체를 생략).
-
-    category_comparison은 category_aggregator.compare_with_history()의 반환 형태:
-    {"국내": {카테고리: {"today", "yesterday", "delta_yesterday", "avg_7day", "delta_avg7day"}}, "해외": {...}}
-    yesterday/avg_7day 각각 그 비교의 재료가 아직 없으면(예: 전환 이틀째라 7일 평균 재료가
-    하루치뿐) 개별 카테고리 단위로 None일 수 있어 그런 경우는 "-"로 표시한다.
-    """
+    """카테고리별 전일/7일 평균 대비 증감을 마크다운으로. None이면 섹션 생략."""
     if not category_comparison:
         return []
     lines = ["\n## 카테고리별 전일·7일 평균 대비 증감"]
@@ -215,14 +159,7 @@ def save_summary_md(directory: str, day_label: str, domestic_summarized: list[di
                      international_by_category: dict[str, list[dict]],
                      failed_sources: list[str],
                      category_comparison: dict[str, dict[str, dict]] | None = None) -> str | None:
-    """
-    사람이 바로 읽는 배포용 요약본 마크다운 파일 (요약 유무와 무관하게 원문 링크는 항상 포함).
-
-    국내/해외 각 섹션 밑에 카테고리별 Top N 하위 섹션 추가 (#### 레벨 - 국내/해외 ##보다 한 단계, 개별 이슈 제목 ###과도 안 겹침). 카테고리가 하나도 없으면 하위 섹션 생략.
-    category_comparison이 있으면 문서 맨 앞(생성 시각 다음)에 증감 섹션 추가, None이면 생략.
-
-    save_raw/save_scored와 동일하게 파일 쓰기 실패를 로그+None으로 흡수.
-    """
+    """사람이 바로 읽는 배포용 요약본 마크다운 파일."""
     lines = [f"# AI·IT 뉴스 큐레이션 - {day_label}", ""]
     lines.append(f"생성 시각(UTC): {datetime.now(timezone.utc).isoformat()}")
     lines.append("")
@@ -273,17 +210,10 @@ def save_day(articles: list[dict], domestic_summarized: list[dict],
              gdelt_timeline: dict, failed_sources: list[str], category_distribution: dict,
              category_comparison: dict[str, dict[str, dict]] | None = None,
              base_dir: str = "data") -> str | None:
-    """
-    main.py에서 부르는 단일 진입점. raw.json/scored.json/summary.md를 한 디렉토리에 저장하고 그 경로를 반환한다.
-    (예전 이름 save_week - 일간 전환하면서 리네임)
-
-    디렉토리 생성 실패 시 저장 전체를 포기하고 None 반환 (로그는 day_dir이 이미 남김).
-    디렉토리는 만들어졌는데 파일 하나가 실패하면 나머지는 계속 저장 시도하고, 끝난 뒤 무엇이 성공/실패했는지 요약 로그를 남긴다.
-    """
+    """main.py에서 부르는 단일 진입점. raw.json/scored.json/summary.md를 저장하고 경로 반환."""
     directory = day_dir(base_dir)
     if directory is None:
-        print("[storage] 🔴 조치필요 [ST-05] - 저장 디렉토리를 만들지 못해 오늘 저장을 건너뜀 "
-              "(raw.json/scored.json/summary.md 전부 저장 안 됨)")
+        print("[storage] 🔴 조치필요 [ST-05] - 저장 디렉토리를 만들지 못해 오늘 저장을 건너뜀")
         return None
 
     day_label = os.path.basename(directory)
@@ -303,8 +233,7 @@ def save_day(articles: list[dict], domestic_summarized: list[dict],
     failed = [name for name, path in saved.items() if path is None]
 
     if failed:
-        print(f"[storage] 🔴 조치필요 [ST-06] - 오늘 저장 일부 실패 - 성공: {succeeded or '없음'} / "
-              f"실패: {failed} (실패 원인은 위 개별 로그 참고) -> {directory}/")
+        print(f"[storage] 🔴 조치필요 [ST-06] - 오늘 저장 일부 실패 - 성공: {succeeded or '없음'} / 실패: {failed} -> {directory}/")
     else:
         print(f"[storage] 오늘 저장 완료 -> {directory}/ (raw.json, scored.json, summary.md)")
 

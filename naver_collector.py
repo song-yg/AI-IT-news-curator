@@ -1,7 +1,4 @@
-"""
-naver_collector.py
-네이버 뉴스 검색 API로 뉴스를 수집하는 모듈 (수집 레이어).
-"""
+"""naver_collector.py - 네이버 뉴스 검색 API 수집 모듈."""
 
 import re
 import html
@@ -14,64 +11,34 @@ from dotenv import load_dotenv
 
 import keyword_source
 
-# .env 파일이 있으면 환경변수로 등록 (없어도 에러 없음 - GitHub Actions는 Secrets가 이미 주입돼 있어 무시됨)
 load_dotenv()
 
-# NAVER Developers Center의 기존 뉴스 검색 API가 NAVER API HUB(NCP API Gateway 기반)로
-# 이관됨(https://guide.ncloud-docs.com/docs/apihub-migration) - 호출 도메인/API Path/인증
-# 헤더명이 전부 바뀜(구: openapi.naver.com, X-Naver-Client-Id/-Secret). 신규 발급된
-# NAVER API HUB Application의 Client ID/Secret이 필요하다 - 기존 Developers Center
-# 인증정보는 이 API HUB 호출에 안 먹힘(NAVER_CLIENT_ID/NAVER_CLIENT_SECRET 환경변수/
-# GitHub Secrets 값을 신규 것으로 교체해야 함, 변수명 자체는 그대로 재사용).
+# NAVER Developers Center -> NAVER API HUB(NCP API Gateway) 이관됨. 인증정보도 신규 발급 필요.
 NAVER_API_URL = "https://naverapihub.apigw.ntruss.com/search/v1/news"
 
-# fallback 키워드. 구글 시트(KEYWORD_SHEET_CSV_URL)가 있으면 그쪽 우선, 없거나 실패 시 이 리스트 사용.
-# 시트가 바뀌면 이것도 수동으로 같이 갱신해야 함 (자동 동기화 아님).
 KEYWORDS = ["인공지능", "AI", "머신러닝", "딥러닝", "챗GPT", "생성형 AI", "자율주행", "로봇", "드론", "메타버스", "가상현실", "증강현실", "블록체인", "NFT", "핀테크", "빅데이터", "클라우드", "사이버보안", "양자컴퓨팅"]
 
 _KST = timezone(timedelta(hours=9))
 
 
 def _default_window(reference: datetime | None = None) -> tuple[datetime, datetime]:
-    """
-    main.py가 window_start/window_end를 안 넘겨줬을 때(예: 이 모듈만 단독 테스트) 쓰는
-    기본 수집 구간 - "지금부터 24시간 전까지"의 롤링 윈도우.
-
-    main.py가 정식으로 계산하는 "어제 00:00 KST ~ 오늘 00:00 KST" 고정 구간과는 다르다
-    (달력 경계에 안 맞음) - 어디까지나 standalone 테스트용 근사치.
-    """
+    """main.py가 구간을 안 넘겨줬을 때(단독 테스트) 쓰는 기본 롤링 24시간 윈도우."""
     now = reference or datetime.now(timezone.utc)
     return now - timedelta(days=1), now
 
 
 def _is_in_window(published_at: str, window_start: datetime, window_end: datetime) -> bool:
-    """
-    published_at(ISO 8601)이 [window_start, window_end) 절대 구간 안에 있는지 확인.
-
-    예전엔 "지금으로부터 N일 이내"(_is_recent, 상대값)였다 - 문제는 여러 키워드를 순회하며
-    호출할 때마다 datetime.now()를 새로 불러서, 같은 실행 안에서도 먼저 처리된 키워드와
-    나중에 처리된 키워드가 서로 다른 절대 구간을 보게 되는 드리프트가 있었다(GDELT 쪽은
-    수집이 최대 220분 걸려서 이 드리프트가 특히 컸음 - gdelt_collector.py 참고). main.py가
-    파이프라인 시작 시점에 딱 한 번 계산한 고정 구간을 여기로 그대로 넘겨받아 쓰면, 어떤
-    키워드가 몇 시에 처리되든 전부 정확히 같은 구간을 보게 되어 이 드리프트가 사라진다.
-    """
     pub_dt = datetime.fromisoformat(published_at)
     if pub_dt.tzinfo is None:
         pub_dt = pub_dt.replace(tzinfo=timezone.utc)
     return window_start <= pub_dt < window_end
 
 
-# 네이버 API가 허용하는 start의 최댓값
-MAX_START = 1000
+MAX_START = 1000  # 네이버 API가 허용하는 start의 최댓값
 
 
 def _phrase_present(article: dict, keyword: str) -> bool:
-    """
-    네이버 검색 API는 공백 포함 검색어를 "정확한 문구"가 아니라 "단어별 AND"로 처리한다.
-    "수급"처럼 범용적인 단어가 섞인 키워드는 무관한 기사가 섞여 들어올 수 있어서,
-    공백이 있는(여러 단어) 키워드만 제목+요약에 실제로 인접해서 등장하는지 재확인한다.
-    단어 하나짜리는 오탐 여지가 없으므로 항상 통과.
-    """
+    """네이버 API는 공백 포함 검색어를 단어별 AND로 처리 - 여러 단어 키워드만 인접 등장 재확인."""
     if " " not in keyword.strip():
         return True
     combined = f"{article.get('title', '')} {article.get('description', '')}"
@@ -81,66 +48,45 @@ def _phrase_present(article: dict, keyword: str) -> bool:
 
 
 def collect(window_start: datetime | None = None, window_end: datetime | None = None) -> list[dict]:
-    """
-    KEYWORDS를 순서대로 돌며 네이버 뉴스를 전부 수집 (진입점).
-
-    window_start/window_end: 이 절대 구간([window_start, window_end)) 안의 기사만 남긴다.
-    main.py가 파이프라인 시작 시점에 "어제 00:00 KST ~ 오늘 00:00 KST"로 계산해 넘겨준다 -
-    안 넘겨받으면(예: 이 모듈만 단독 테스트) _default_window()로 대체(지금부터 24시간 전
-    까지의 롤링 윈도우 - 위 _default_window docstring 참고).
-    """
+    """KEYWORDS(또는 시트)를 순회하며 네이버 뉴스를 수집(진입점)."""
     if window_start is None or window_end is None:
         window_start, window_end = _default_window()
 
     client_id = os.environ["NAVER_CLIENT_ID"]
     client_secret = os.environ["NAVER_CLIENT_SECRET"]
-
-    # 구글 시트 활성 키워드 우선, 실패 시 하드코딩 KEYWORDS로 안전하게 대체
     target_keywords = keyword_source.get_keywords("ko", KEYWORDS)
 
     all_results = []
-    # 세션 재사용 - 키워드마다 여러 페이지를 반복 호출하므로 커넥션 유지로 오버헤드 절감
     with requests.Session() as session:
         for keyword in target_keywords:
-            # try 범위는 네트워크 호출 부분만 - 페이지네이션 도중 예외가 나도 이미 모은 결과는 보존
             keyword_results = []
             start = 1
             try:
                 while start <= MAX_START:
                     page = search_naver_news(keyword, client_id, client_secret, start=start, session=session)
-
                     if not page:
-                        break  # 더 가져올 결과 없음
+                        break
 
                     in_window = [r for r in page if _is_in_window(r["published_at"], window_start, window_end)]
                     phrase_ok = [r for r in in_window if _phrase_present(r, keyword)]
                     filtered_out = len(in_window) - len(phrase_ok)
                     if filtered_out:
-                        print(f"[naver] '{keyword}' - 문구 인접성 필터로 {filtered_out}건 제외"
-                              f"(AND 매칭 오탐 방지)")
+                        print(f"[naver] '{keyword}' - 문구 인접성 필터로 {filtered_out}건 제외")
                     keyword_results.extend(phrase_ok)
 
-                    # 마지막 항목 = 이 페이지에서 가장 오래된 기사 (sort=date라 항상 마지막이 제일 오래됨)
-                    # window_start보다 오래됐으면 그 뒤 페이지는 전부 구간 밖이므로 더 볼 필요 없음
-                    # (window_end보다 새 기사가 앞쪽 페이지에 섞여있는 건 위 in_window 필터가 알아서 거름).
-                    oldest_in_page = page[-1]
-                    oldest_dt = datetime.fromisoformat(oldest_in_page["published_at"])
+                    oldest_dt = datetime.fromisoformat(page[-1]["published_at"])
                     if oldest_dt < window_start:
                         break
-
                     if len(page) < 100:
-                        break  # 100건 미만 = 더 이상 결과 없음
-
+                        break
                     start += 100
                     time.sleep(0.2)
             except requests.exceptions.RequestException as e:
-                print(f"[naver] 🔴 조치필요 [NV-01] - '{keyword}' 수집 중 오류 발생(지금까지 모은 "
-                      f"{len(keyword_results)}건은 보존하고 다음 키워드로 진행): {type(e).__name__} - {e!r}")
+                print(f"[naver] 🔴 조치필요 [NV-01] - '{keyword}' 수집 중 오류(기존 {len(keyword_results)}건 보존): "
+                      f"{type(e).__name__} - {e!r}")
 
             all_results.extend(keyword_results)
-            print(f"[naver] '{keyword}' -> 구간 내 {len(keyword_results)}건 "
-                  f"({start if start <= MAX_START else MAX_START}건째까지 확인)")
-
+            print(f"[naver] '{keyword}' -> 구간 내 {len(keyword_results)}건")
             time.sleep(0.2)
 
     return all_results
@@ -148,30 +94,16 @@ def collect(window_start: datetime | None = None, window_end: datetime | None = 
 
 def search_naver_news(keyword: str, client_id: str, client_secret: str, start: int = 1,
                        session: requests.Session | None = None) -> list[dict]:
-    """
-    네이버 뉴스 검색 API 호출, 공통 스키마로 정리해서 반환.
-
-    session을 안 넘기면 requests 모듈을 그대로 써서 매번 새 연결을 맺는다.
-    (세션 재사용은 순전히 성능 최적화, 없어도 기능은 동일)
-    """
-    # NAVER API HUB 인증 헤더명 (구 Developers Center의 X-Naver-Client-Id/-Secret에서 변경됨 -
-    # 위 NAVER_API_URL 옆 주석 참고)
+    """네이버 뉴스 검색 API 호출, 공통 스키마로 반환."""
     headers = {
         "X-NCP-APIGW-API-KEY-ID": client_id,
         "X-NCP-APIGW-API-KEY": client_secret,
     }
-
-    params = {
-        "query": keyword,
-        "display": 100,   # 한 번에 최대 100건 (API 하드 리밋)
-        "start": start,
-        "sort": "date",   # 기본값 sim(정확도순) 대신 최신순
-    }
+    params = {"query": keyword, "display": 100, "start": start, "sort": "date"}
 
     requester = session if session is not None else requests
     response = requester.get(NAVER_API_URL, headers=headers, params=params, timeout=10)
     response.raise_for_status()
-
     data = response.json()
 
     results = []
@@ -181,8 +113,8 @@ def search_naver_news(keyword: str, client_id: str, client_secret: str, start: i
             "title": _strip_html_tags(item["title"]),
             "url": item["originallink"] or item["link"],
             "published_at": _parse_pub_date(item["pubDate"]),
-            "category": None,   # 정규화 단계에서 채움
-            "body": None,       # 네이버는 본문을 안 줌
+            "category": None,
+            "body": None,
             "description": _strip_html_tags(item["description"]),
             "press": _extract_press(item["originallink"]),
         })
@@ -190,21 +122,13 @@ def search_naver_news(keyword: str, client_id: str, client_secret: str, start: i
 
 
 def _parse_pub_date(pub_date_str: str) -> str:
-    """네이버 pubDate(RFC 822, "Mon, 13 Jul 2026 09:00:00 +0900")를 ISO 8601로 변환."""
+    """RFC 822 -> ISO 8601."""
     dt = datetime.strptime(pub_date_str, "%a, %d %b %Y %H:%M:%S %z")
     return dt.isoformat()
 
 
 def _extract_press(originallink: str) -> str:
-    """
-    네이버 API에 언론사명 필드가 없어서 원문 URL 도메인을 언론사 식별자로 대신 사용.
-    예: "https://www.yna.co.kr/..." -> "yna.co.kr"
-
-    www. 제거는 startswith 체크 후 슬라이싱 (replace는 서브도메인 중간에 우연히 "www."가 있어도 지워버릴 수 있어서 위험).
-
-    biz.yna.co.kr / www.yna.co.kr 같은 서브도메인 통합은 안 함 - 정확히 하려면 tldextract 등이 필요함.
-    실제 문제(scorer PRESS_DEDUP_CAP 왜곡) 확인되면 대응.
-    """
+    """URL 도메인을 언론사 식별자로 사용."""
     if not originallink:
         return ""
     domain = urlparse(originallink).netloc
@@ -214,10 +138,8 @@ def _extract_press(originallink: str) -> str:
 
 
 def _strip_html_tags(text: str) -> str:
-    """네이버 API 응답의 title/description에 섞인 <b>강조 태그</b>와 HTML 엔티티 제거."""
     text = re.sub(r"<[^>]+>", "", text)
-    text = html.unescape(text)
-    return text
+    return html.unescape(text)
 
 
 if __name__ == "__main__":

@@ -1,26 +1,4 @@
-"""
-deploy.py - 6단계 배포 레이어.
-
-Gmail SMTP로 오늘 큐레이션 결과를 HTML 이메일로 발송. main.py의 [6]에서 send_daily_email() 호출.
-
-** 인증정보 **
-GitHub Secrets에서 읽음: SMTP_USER(발신 Gmail), SMTP_APP_PASSWORD(앱 비밀번호), EMAIL_RECIPIENTS(콤마 구분 수신자).
-
-** 콘텐츠 구성 **
-storage.py가 만든 domestic/international_summarized·by_category(scored.json과 동일 데이터)를 받아 summary.md와 같은 구조로 HTML 렌더링.
-이메일 클라이언트는 외부 스타일시트를 지원 안 하는 경우가 많아 인라인 스타일만 사용.
-폭 1000px, 옅은 회색 배경 위 흰색 콘텐츠 카드, 국내/해외를 좌우 2단(table 기반)으로 배치한다
-(사료·축산업 뉴스 큐레이션 시스템과 레이아웃 통일 - flexbox/grid 대신 table을 쓰는 이유도 동일:
-이메일 클라이언트, 특히 구형 Outlook은 flex/grid 지원이 들쭉날쭉해도 table은 안정적으로 지원됨).
-
-** Outlook 렌더링 **
-border-radius는 아웃룩 데스크톱(Word 렌더링 엔진)에서 무시되고 각진 사각형으로 보인다.
-레이아웃은 안 깨지고 덜 둥글게만 보이는 수준이라 VML 폴백 없이 그대로 둠.
-
-** 안전 실패 **
-storage.py와 같은 방향.
-발송 실패(SMTP 인증 오류 등) 시 예외 대신 로그만 남기고조용히 실패 (이미 수집/스코어링/요약/저장이 끝난 뒤라 배포 하나로 전체를 죽이면 안 됨).
-"""
+"""deploy.py - Gmail SMTP로 오늘 큐레이션 결과를 HTML 이메일로 발송(main.py [6]에서 send_daily_email() 호출)."""
 
 import html
 import os
@@ -32,7 +10,6 @@ from email.mime.text import MIMEText
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
 
-# 국내/해외 두 축을 색상으로 구분 - 순위 뱃지/섹션 좌측 보더/카테고리 pill에 공통 사용.
 DOMESTIC_ACCENT = "#1a73e8"
 INTERNATIONAL_ACCENT = "#7c3aed"
 DOMESTIC_PILL_BG = "#e8f0fe"
@@ -46,29 +23,17 @@ def _escape(value) -> str:
 
 
 def _humanize_day_label(day_label: str) -> str:
-    """
-    day_label(YYYY-MM-DD, "2026-07-31")을 "2026년 7월 31일"처럼 사람이 읽기 편한 형식으로 변환.
-      - 헤더/제목 표시용, 저장/비교에는 안 쓰임.
-      (예전엔 ISO 연도-주차를 "n월 n주차"로 변환하는 _humanize_week_label이었음 - 일간 전환하면서 교체)
-
-    변환 실패 시 원본 day_label 그대로 반환 (표시 형식 하나 때문에 발송 전체가 막히면 안 됨).
-    """
+    """"2026-07-31" -> "2026년 7월 31일". 변환 실패 시 원본 그대로."""
     try:
         day = date.fromisoformat(day_label)
     except (ValueError, TypeError) as e:
-        print(f"[deploy] 🟡 주의 [DP-01] - day_label 형식 변환 실패({day_label!r}) - "
-              f"원본 그대로 사용: {type(e).__name__} - {e!r}")
+        print(f"[deploy] 🟡 주의 [DP-01] - day_label 형식 변환 실패({day_label!r}): {type(e).__name__} - {e!r}")
         return day_label
-
     return f"{day.year}년 {day.month}월 {day.day}일"
 
 
 def _format_issue_html(item: dict, rank: int | None = None, accent: str = DOMESTIC_ACCENT) -> str:
-    """
-    이슈 하나 분량의 HTML 카드 (storage._format_issue_section과 같은 정보).
-    rank: 목록 내 순서(None이면 순위 뱃지 없음, 호출부가 enumerate로 1부터 매겨서 넘김).
-    accent: 국내(파랑)/해외(보라) 구분 색상.
-    """
+    """이슈 하나 분량의 HTML 카드."""
     titles = item.get("titles", [])
     rep_title = titles[0] if titles else "(제목 없음)"
     title_ko = item.get("title_ko")
@@ -83,7 +48,6 @@ def _format_issue_html(item: dict, rank: int | None = None, accent: str = DOMEST
 
     orig_title_html = ""
     if title_ko and title_ko != rep_title:
-        # 번역된 경우 원문도 작게 남겨둠 - 검색/원문 대조용(예: 해외 기사 원제)
         orig_title_html = (f'<p style="margin:2px 0 4px 0; font-size:11px; color:#aaa; '
                            f'font-style:italic;">원문: {_escape(rep_title)}</p>')
 
@@ -125,19 +89,16 @@ def _format_issue_html(item: dict, rank: int | None = None, accent: str = DOMEST
 
 
 def _format_section_html(title: str, items: list[dict], accent: str = DOMESTIC_ACCENT) -> str:
-    """축 색상 컬러바가 붙은 섹션 제목 + 순위 매긴 이슈 카드들."""
     header = (f'<h3 style="font-size:16px; color:#222; margin:20px 0 10px 0; padding-left:10px; '
               f'border-left:4px solid {accent};">{_escape(title)}</h3>')
     if not items:
         return header + '<p style="color:#999; font-size:13px;">(이번 주 이슈 없음)</p>'
-    # items는 이미 점수순 정렬 상태 - 그대로 1부터 번호만 매김
     body = "".join(_format_issue_html(item, rank=i, accent=accent) for i, item in enumerate(items, start=1))
     return header + body
 
 
 def _format_category_html(label: str, by_category: dict[str, list[dict]],
                            accent: str = DOMESTIC_ACCENT, pill_bg: str = DOMESTIC_PILL_BG) -> str:
-    """카테고리별 Top N. 카테고리마다 알약 태그 + 그 안에서 1부터 순위 매김."""
     if not by_category:
         return ""
     blocks = []
@@ -147,7 +108,6 @@ def _format_category_html(label: str, by_category: dict[str, list[dict]],
             f'background:{pill_bg}; color:{accent}; font-size:15px; font-weight:bold; '
             f'margin:14px 0 8px 0;">{_escape(category)}</span></div>'
         )
-        # 카테고리별 별도 Top N이라 전체 순위가 아니라 카테고리 안에서 1부터 다시 매김
         blocks.append("".join(_format_issue_html(item, rank=i, accent=accent) for i, item in enumerate(items, start=1)))
     header = (f'<h3 style="font-size:16px; color:#222; margin:24px 0 8px 0; padding-left:10px; '
               f'border-left:4px solid {accent};">{_escape(label)}</h3>')
@@ -155,13 +115,7 @@ def _format_category_html(label: str, by_category: dict[str, list[dict]],
 
 
 def _format_category_comparison_axis_html(axis_data: dict[str, dict] | None, accent: str) -> str:
-    """
-    카테고리별 전일 대비 + 7일 평균 대비 증감 표(축 하나 분량). 2단 레이아웃에서 좌우 배치용.
-    axis_data는 category_aggregator.compare_with_history()의 축 하나 분량
-    ({카테고리: {"today","yesterday","delta_yesterday","avg_7day","delta_avg7day"}}).
-    yesterday/avg_7day가 카테고리별로 None일 수 있음(예: 일간 전환 이틀째라 7일 평균 재료 부족)
-    - 그 경우 해당 칸에 "-" 표시.
-    """
+    """카테고리별 전일/7일 평균 대비 증감 표(축 하나 분량). None 값은 "-"로 표시."""
     if not axis_data:
         return '<p style="font-size:13px; color:#999; margin:4px 0;">(비교할 과거 데이터 없음)</p>'
     rows = []
@@ -210,7 +164,7 @@ def _format_category_comparison_axis_html(axis_data: dict[str, dict] | None, acc
 
 
 def _two_column_table(left_html: str, right_html: str) -> str:
-    """국내/해외 두 블록을 좌우로 배치. flexbox/grid 대신 table 사용(구형 Outlook 호환)."""
+    """국내/해외 두 블록을 좌우로 배치(구형 Outlook 호환 위해 table 사용)."""
     return f"""
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%; border-collapse:collapse; table-layout:fixed;">
       <tr>
@@ -228,19 +182,7 @@ def render_email_html(day_label: str, domestic_summarized: list[dict], internati
                        category_comparison: dict[str, dict[str, dict]] | None = None,
                        error_codes: list[str] | None = None,
                        category_charts: dict[str, str] | None = None) -> str:
-    """
-    scored.json 데이터로 이메일 본문 HTML 생성. 폭 1000px, 옅은 회색 배경 위
-    흰색 콘텐츠 카드, 국내/해외 좌우 2단 레이아웃.
-
-    error_codes: 이번 실행에서 발생한 "🔴 조치필요" 등급 오류 코드 목록(error_log.py가 stdout에서
-    자동 수집, 중복 제거·등장 순서). 자세한 메시지 없이 코드만, 맨 아래 아주 작은 글씨로 표시 -
-    운영자가 훑어보다가 뭔가 있었는지만 눈치채면 되는 용도라 본문 가독성을 해치지 않게
-    최대한 눈에 안 띄게 둔다.
-
-    category_charts: {"국내"/"해외": base64 PNG 문자열}(category_chart.generate_charts() 참고) -
-    <img src="data:image/png;base64,...">로 그대로 삽입. 축 하나만 있어도 그 축만 표시,
-    아예 없으면(matplotlib 미설치 등) 이 섹션 자체를 생략.
-    """
+    """scored.json 데이터로 이메일 본문 HTML 생성."""
     header_html = f"""
     <div style="background:{HEADER_BG}; padding:26px 32px; border-radius:10px 10px 0 0;">
       <p style="margin:0; font-size:11px; letter-spacing:2px; color:#9fc0ff; font-weight:bold;">NEWSLETTER</p>
@@ -294,7 +236,6 @@ def render_email_html(day_label: str, domestic_summarized: list[dict], internati
             f'참고 - 이번 실행에서 실패한 소스: {_escape(", ".join(failed_sources))}</p>'
         )
 
-    # 푸터 - AI 저작 고지 + 자동 발송 안내
     parts.append(
         '<p style="margin-top:28px; padding-top:16px; border-top:1px solid #eee; '
         'font-size:11px; color:#aaa; text-align:center;">'
@@ -304,8 +245,6 @@ def render_email_html(day_label: str, domestic_summarized: list[dict], internati
     )
 
     if error_codes:
-        # 자세한 메시지는 콘솔 로그에만 남기고, 여기는 코드만 - 운영자용 참고 표시라
-        # 위 정식 푸터보다도 더 작고 옅게(9px, 아주 연한 회색) 둬서 눈에 잘 안 띄게 한다.
         parts.append(
             f'<p style="margin-top:6px; font-size:9px; color:#ddd; text-align:center;">'
             f'{_escape(", ".join(error_codes))}</p>'
@@ -319,7 +258,7 @@ def render_email_html(day_label: str, domestic_summarized: list[dict], internati
 
 def send_email(html_content: str, subject: str, recipients: list[str],
                smtp_user: str, smtp_app_password: str) -> bool:
-    """Gmail SMTP(587, STARTTLS)로 HTML 이메일 발송. 성공 True, 실패(예외 없이) False."""
+    """Gmail SMTP(587, STARTTLS)로 HTML 이메일 발송."""
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = smtp_user
@@ -346,14 +285,7 @@ def send_daily_email(day_label: str, domestic_summarized: list[dict], internatio
                       category_comparison: dict[str, dict[str, dict]] | None = None,
                       error_codes: list[str] | None = None,
                       category_charts: dict[str, str] | None = None) -> bool:
-    """
-    main.py에서 부르는 단일 진입점. GitHub Secrets에서 인증정보를 읽고, 없으면 안전하게 생략.
-    day_label은 main.py의 YYYY-MM-DD 형식 그대로 받는다.
-
-    error_codes: render_email_html()에 그대로 전달 - 이메일 하단에 눈에 안 띄게 표시.
-    category_charts: render_email_html()에 그대로 전달 - {"국내"/"해외": base64 PNG} 형태
-    (category_chart.generate_charts() 참고), 없는 축은 그 섹션 생략.
-    """
+    """main.py에서 부르는 단일 진입점. 인증정보 없으면 안전하게 생략."""
     smtp_user = os.environ.get("SMTP_USER")
     smtp_app_password = os.environ.get("SMTP_APP_PASSWORD")
     recipients_raw = os.environ.get("EMAIL_RECIPIENTS")
@@ -367,7 +299,7 @@ def send_daily_email(day_label: str, domestic_summarized: list[dict], internatio
 
     recipients = [r.strip() for r in recipients_raw.split(",") if r.strip()]
     if not recipients:
-        print("[deploy] 🔴 조치필요 [DP-05] - EMAIL_RECIPIENTS가 비어있음(콤마만 있거나 공백) - 이메일 발송 생략")
+        print("[deploy] 🔴 조치필요 [DP-05] - EMAIL_RECIPIENTS가 비어있음 - 이메일 발송 생략")
         return False
 
     html_content = render_email_html(day_label, domestic_summarized, international_summarized,
