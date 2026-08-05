@@ -3,8 +3,8 @@ gdelt_collector.py
 GDELT DOC 2.0 API를 파이썬 클라이언트(gdeltdoc)로 호출해서
 키워드별 해외 언급 데이터를 수집하는 모듈.
 
-naver_collector / watt_collector와 반환 형태가 다르다는 점이 핵심 차이:
-그 둘은 list[dict] 하나만 반환하지만, 이 모듈은 tuple(articles, timeline)을 반환한다.
+naver_collector와 반환 형태가 다르다는 점이 핵심 차이:
+naver_collector는 list[dict] 하나만 반환하지만, 이 모듈은 tuple(articles, timeline)을 반환한다.
 이유:
   - articles: 기사 1건 = 레코드 1건 -> 공통 스키마 그대로, 정규화/이슈그룹핑으로 감
   - timeline: 키워드 단위 시계열(timelinevol/timelinevolraw) -> 기사 단위가 아니라서 공통 스키마에 억지로 끼워넣지 않음.
@@ -311,7 +311,7 @@ def _is_false_positive(keyword: str, title: str) -> bool:
     return any(_normalize_spacing(p.lower()) in title_normalized for p in patterns)
 
 # 이 프로젝트는 매일 새벽 실행이므로, 전날(어제 00:00 KST ~ 오늘 00:00 KST) 이내 기사만
-# 남긴다 (naver/watt와 동일 방침). main.py가 파이프라인 시작 시점에 이 절대 구간을 딱 한 번
+# 남긴다 (naver와 동일 방침). main.py가 파이프라인 시작 시점에 이 절대 구간을 딱 한 번
 # 계산해서 collect()에 window_start/window_end로 넘겨준다.
 #
 # 예전엔 TIMESPAN(상대값, "지금부터 Nd")을 GDELT API에 그대로 넘겼는데, 배치 요청이 최대
@@ -580,11 +580,8 @@ def _call_with_retry(func, *args, label: str = "", **kwargs):
 def _parse_seendate(raw: str) -> datetime:
     """
     gdeltdoc article_search가 반환하는 seendate 필드를 datetime으로 변환한다.
-
-    TODO 확인 필요: 실제 seendate 값의 정확한 포맷을 직접 실행해서 확인 안 한 상태.
     GDELT 원시 데이터에서 흔히 쓰이는 "YYYYMMDDHHMMSS" 형태(예: "20260713090000")
-    또는 뒤에 "Z"가 붙는 형태를 우선 시도하고, 안 되면 ISO 8601도 시도하도록 짜둠.
-    (watt_collector의 _parse_published_time과 같은 방어적 접근)
+    또는 뒤에 "Z"가 붙는 형태를 우선 시도하고, 안 되면 ISO 8601도 시도하는 방어적 접근.
     """
     raw = raw.strip()
 
@@ -640,7 +637,6 @@ def _collect_articles_for_keyword(gd: "GdeltDoc", keyword: str,
 
     try:
         articles_df = _call_with_retry(gd.article_search, f, label=f"{keyword} / article_search")
-        print(f"[DEBUG] 원본 응답 건수(필터 전): {0 if articles_df is None else len(articles_df)}건")
 
         if articles_df is not None and not articles_df.empty:
             for _, row in articles_df.iterrows():

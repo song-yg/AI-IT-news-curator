@@ -42,6 +42,7 @@ import category_aggregator
 import relevance_filter
 import storage
 import deploy
+import error_log
 
 _KST = timezone(timedelta(hours=9))
 
@@ -401,7 +402,8 @@ def step4_llm_summary(domestic_ranked: list[dict],
 
 def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list[str],
                  window_start: datetime, window_end: datetime,
-                 process_start: float | None = None) -> None:
+                 process_start: float | None = None,
+                 prior_error_codes: list[str] | None = None) -> None:
     """
     [2] 정규화 ~ [6] 배포 전체. run()(단일 실행, 로컬 테스트용)과 process_stage.py(Job
     체이닝의 process Job)가 공유하는 본체 - process_start만 호출부가 정해서 넘겨준다
@@ -411,6 +413,11 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
     이 단계부터 [4-보조]까지 각 단계를 개별 try/except 안전망으로 감싼다 - 예상 못 한
     예외가 나도 그 단계만 기본값으로 넘어가고, 이미 모은 articles는 살려서 [5] 저장/
     [6] 배포까지 도달하게 함.
+
+    prior_error_codes: 이 함수 밖(수집 단계)에서 이미 발생한 "🔴 조치필요" 코드 목록
+    (error_log.py 참고) - [6] 배포에서 이번 실행 전체(수집+정규화~요약)의 코드를 합쳐
+    이메일 하단에 표시하기 위해 받는다. collect_stage.py는 별도 프로세스(Job)라 여기
+    캡처에 안 잡히므로, process_stage.py가 collected.json에서 읽어 넘겨준다.
     """
     if process_start is None:
         process_start = time.monotonic()
@@ -423,6 +430,11 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
     deadline_grouping = float("inf")
     deadline_stage4 = float("inf")
     deadline_summary = float("inf")
+
+    # [6] 배포에서 이메일 하단에 표시할 오류 코드 수집 시작 - [5] 저장까지의 모든 🔴 조치필요
+    # 로그를 모은다(들여쓰기 없이 쓸 수 있는 짝 함수, error_log.py 참고. 아래 [6] 진입 직전에
+    # stop_capture()로 회수).
+    error_log.start_capture()
 
     print("\n=== [2] 정규화 ===")
     try:
@@ -442,7 +454,7 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
     try:
         groups = issue_grouper.group_issues(articles, model=embedding_model, deadline=deadline_grouping)
     except Exception as e:
-        print(f"[main] 🔴 조치필요 [MN-16] - [2.2] 이슈 그룹핑 단계에서 예상 못 한 오류 발생 - "
+        print(f"[main] 🔴 조치필요 [MN-06] - [2.2] 이슈 그룹핑 단계에서 예상 못 한 오류 발생 - "
               f"그룹핑 없이(기사 1건 = 그룹 1개) 다음 단계로 진행: {type(e).__name__} - {e!r}")
         groups = [[a] for a in articles]
 
@@ -454,7 +466,7 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
     try:
         groups = relevance_filter.filter_groups(groups, deadline=deadline_relevance)
     except Exception as e:
-        print(f"[main] 🔴 조치필요 [MN-06] - [2.5] 관련성 필터 단계에서 예상 못 한 오류 발생 - 필터링 없이 다음 단계로 진행: "
+        print(f"[main] 🔴 조치필요 [MN-07] - [2.5] 관련성 필터 단계에서 예상 못 한 오류 발생 - 필터링 없이 다음 단계로 진행: "
               f"{type(e).__name__} - {e!r}")
 
     print("\n=== [2.6] 카테고리 재분류 (그룹 대표 1건씩 판단) ===")
@@ -463,7 +475,7 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
     try:
         groups = relevance_filter.recategorize_uncategorized_groups(groups, deadline=deadline_category)
     except Exception as e:
-        print(f"[main] 🔴 조치필요 [MN-07] - [2.6] 카테고리 재분류 단계에서 예상 못 한 오류 발생 - 재분류 없이 다음 단계로 진행: "
+        print(f"[main] 🔴 조치필요 [MN-08] - [2.6] 카테고리 재분류 단계에서 예상 못 한 오류 발생 - 재분류 없이 다음 단계로 진행: "
               f"{type(e).__name__} - {e!r}")
 
     # 카테고리 집계([3-보조])/raw.json 저장([5])은 개별 기사 단위 리스트가 필요해서,
@@ -480,7 +492,7 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
         scorer.print_category_top_n("국내", domestic_category_ranked, n=CATEGORY_TOP_N)
         scorer.print_category_top_n("해외", international_category_ranked, n=CATEGORY_TOP_N)
     except Exception as e:
-        print(f"[main] 🔴 조치필요 [MN-08] - [3] 스코어링 단계에서 예상 못 한 오류 발생 - 오늘은 Top N 없이 진행"
+        print(f"[main] 🔴 조치필요 [MN-09] - [3] 스코어링 단계에서 예상 못 한 오류 발생 - 오늘은 Top N 없이 진행"
               f"(저장 단계에서 raw.json은 그대로 남음): {type(e).__name__} - {e!r}")
         domestic_ranked, international_ranked = [], []
         domestic_category_ranked, international_category_ranked = {}, {}
@@ -493,7 +505,7 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
         category_comparison = category_aggregator.compare_with_history(category_distribution)
         category_aggregator.print_aggregate_with_history(category_distribution, category_comparison)
     except Exception as e:
-        print(f"[main] 🔴 조치필요 [MN-09] - [3-보조] 카테고리 집계 단계에서 예상 못 한 오류 발생 - 오늘은 집계 없이 진행: "
+        print(f"[main] 🔴 조치필요 [MN-10] - [3-보조] 카테고리 집계 단계에서 예상 못 한 오류 발생 - 오늘은 집계 없이 진행: "
               f"{type(e).__name__} - {e!r}")
         category_distribution, category_comparison = {}, None
 
@@ -504,7 +516,7 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
         llm_summarizer.print_summaries("국내", domestic_summarized)
         llm_summarizer.print_summaries("해외", international_summarized)
     except Exception as e:
-        print(f"[main] 🔴 조치필요 [MN-10] - [4] LLM 요약 단계에서 예상 못 한 오류 발생 - 요약 없이(원문 제목만) 진행: "
+        print(f"[main] 🔴 조치필요 [MN-11] - [4] LLM 요약 단계에서 예상 못 한 오류 발생 - 요약 없이(원문 제목만) 진행: "
               f"{type(e).__name__} - {e!r}")
         domestic_summarized, international_summarized = domestic_ranked, international_ranked
 
@@ -517,7 +529,7 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
         for category, items in international_category_summarized.items():
             llm_summarizer.print_summaries(f"해외-{category}", items)
     except Exception as e:
-        print(f"[main] 🔴 조치필요 [MN-11] - [4-보조] 카테고리별 LLM 요약 단계에서 예상 못 한 오류 발생 - 요약 없이(원문 제목만) 진행: "
+        print(f"[main] 🔴 조치필요 [MN-12] - [4-보조] 카테고리별 LLM 요약 단계에서 예상 못 한 오류 발생 - 요약 없이(원문 제목만) 진행: "
               f"{type(e).__name__} - {e!r}")
         domestic_category_summarized, international_category_summarized = (
             domestic_category_ranked, international_category_ranked)
@@ -538,23 +550,27 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
                                           gdelt_timeline, failed_sources, category_distribution,
                                           category_comparison)
         except Exception as e:
-            print(f"[main] 🔴 조치필요 [MN-12] - 저장 단계에서 예상 못 한 오류 발생(콘솔 로그의 결과는 그대로 유효함): "
+            print(f"[main] 🔴 조치필요 [MN-13] - 저장 단계에서 예상 못 한 오류 발생(콘솔 로그의 결과는 그대로 유효함): "
                   f"{type(e).__name__} - {e!r}")
             saved_dir = None
+    # [2]~[5]까지 발생한 🔴 조치필요 코드 회수 + 수집 단계(있으면) 몫과 합치기
+    this_stage_codes = error_log.stop_capture()
+    all_error_codes = error_log.merge_unique(prior_error_codes or [], this_stage_codes)
+
     print("\n=== [6] 배포 ===")
     # day_label은 저장이 성공했으면 그 디렉토리 이름을 재사용(날짜 계산 중복 방지), 저장이 실패한 드문 경우만 직접 계산.
     try:
         day_label = os.path.basename(saved_dir) if saved_dir else datetime.now(timezone.utc).strftime("%Y-%m-%d")
         deploy.send_daily_email(day_label, domestic_summarized, international_summarized,
                                  domestic_category_summarized, international_category_summarized,
-                                 failed_sources, category_comparison)
+                                 failed_sources, category_comparison, all_error_codes)
     except Exception as e:
-        print(f"[main] 🔴 조치필요 [MN-13] - 배포 단계에서 예상 못 한 오류 발생(콘솔 로그의 결과는 그대로 유효함): "
+        print(f"[main] 🔴 조치필요 [MN-14] - 배포 단계에서 예상 못 한 오류 발생(콘솔 로그의 결과는 그대로 유효함): "
               f"{type(e).__name__} - {e!r}")
 
     if failed_sources:
         saved_dir_note = f"{saved_dir}/scored.json에도" if saved_dir else "(data/ 파일에는 안 남았지만)"
-        print(f"\n[main] 🔴 조치필요 [MN-14] - 이번 실행 실패 소스: {failed_sources} "
+        print(f"\n[main] 🔴 조치필요 [MN-15] - 이번 실행 실패 소스: {failed_sources} "
               f"({saved_dir_note} failed_sources로 같이 저장됨)")
 
 
@@ -572,10 +588,12 @@ def run() -> None:
     pipeline_start = time.monotonic()
 
     print("=== [1] 수집 시작 ===")
+    error_log.start_capture()
     articles, gdelt_timeline, failed_sources = run_collectors(window_start, window_end)
+    collect_error_codes = error_log.stop_capture()
 
     run_process(articles, gdelt_timeline, failed_sources, window_start, window_end,
-                process_start=pipeline_start)
+                process_start=pipeline_start, prior_error_codes=collect_error_codes)
 
 
 if __name__ == "__main__":

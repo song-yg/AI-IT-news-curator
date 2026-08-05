@@ -346,10 +346,10 @@ if "openrouter/free" not in [m for _, m in _LLM_MODEL_CHAIN_OPENROUTER_ROLES]:
 
 # 순위 라벨 -> 실패 시 찍을 오류 코드 (역할 고정 - 체인 길이와 무관하게 항상 동일한 역할은 동일한 코드로 찍힘)
 _LLM_MODEL_ROLE_ERROR_CODE = {
-    "1순위": "IG-07",
-    "2순위": "IG-08",
-    "3순위": "IG-09",
-    "최종 안전망": "IG-10",
+    "1순위": "IG-02",
+    "2순위": "IG-03",
+    "3순위": "IG-04",
+    "최종 안전망": "IG-05",
 }
 
 # 기존 코드(다른 곳에서 로그 표시용으로 참조하는 " -> ".join(...) 등)와의 하위호환을 위해 모델명만 뽑은 리스트도 그대로 유지.
@@ -496,7 +496,7 @@ def _call_llm(pairs: list[tuple[dict, dict, float]], api_key: str, session: requ
     try:
         parsed = _request_llm_text(_LLM_SYSTEM_PROMPT, user_prompt, api_key, session, validate=_validate)
     except Exception as e:
-        print(f"[issue_grouper] 🔴 조치필요 [IG-02] - 3차 LLM({LLM_PROVIDER}) 호출/파싱 실패 - 이 배치({len(pairs)}쌍)는 "
+        print(f"[issue_grouper] 🔴 조치필요 [IG-06] - 3차 LLM({LLM_PROVIDER}) 호출/파싱 실패 - 이 배치({len(pairs)}쌍)는 "
               f"전부 '안 묶음' fallback: {type(e).__name__} - {e!r}")
         return None
 
@@ -520,7 +520,7 @@ def _call_llm(pairs: list[tuple[dict, dict, float]], api_key: str, session: requ
             results.append(False)  # 안전한 기본값 - 안 묶음
 
     if missing:
-        print(f"[issue_grouper] 🟡 주의 [IG-03] - 3차 LLM({LLM_PROVIDER}) 출력에서 id {missing} 누락"
+        print(f"[issue_grouper] 🟡 주의 [IG-07] - 3차 LLM({LLM_PROVIDER}) 출력에서 id {missing} 누락"
               f"(기대 {len(pairs)}쌍 중 {len(missing)}쌍) - 그 쌍들만 '안 묶음' 기본값 처리, "
               f"나머지 {len(pairs) - len(missing)}쌍은 정상 판정 사용")
 
@@ -532,10 +532,10 @@ def stage3_llm_assist(borderline_pairs: list[tuple[dict, dict, float]],
     """
     2차에서 애매 구간에 걸린 쌍들을 LLM에 물어봐서, "같은 사건"으로 확정된 쌍만 골라 반환한다 (그룹을 지우는 게 아니라 묶을지 말지만 판단).
 
-    LLM_PROVIDER(기본 anthropic)에 따라 필요한 API 키 환경변수가 다르다:
+    LLM_PROVIDER(기본 anthropic, 실제 운영은 openrouter로 전환됨 - README 참고)에 따라
+    필요한 API 키 환경변수가 다르다:
       anthropic  -> ANTHROPIC_API_KEY
-      openrouter -> OPENROUTER_API_KEY (임시 로컬 검증용 - 위 프로바이더
-                    스위치 주석 참조, 운영 환경에서는 쓰지 않을 것)
+      openrouter -> OPENROUTER_API_KEY
 
     해당 키가 없거나 모든 배치 호출이 실패하면, "안 묶음" 보수적 기본값으로 안전하게 fallback한다.
      - 이 경우 group_issues의 최종 결과는 3차가 아예 없던 이전 동작과 동일해지므로 전체 파이프라인이 죽지 않는다.
@@ -553,7 +553,7 @@ def stage3_llm_assist(borderline_pairs: list[tuple[dict, dict, float]],
     key_env_var = "OPENROUTER_API_KEY" if LLM_PROVIDER == "openrouter" else "ANTHROPIC_API_KEY"
     api_key = os.environ.get(key_env_var)
     if not api_key:
-        print(f"[issue_grouper] 🟡 주의 [IG-04] - {key_env_var} 없음(LLM_PROVIDER={LLM_PROVIDER}) - 3차 LLM 보조 생략, "
+        print(f"[issue_grouper] 🟡 주의 [IG-08] - {key_env_var} 없음(LLM_PROVIDER={LLM_PROVIDER}) - 3차 LLM 보조 생략, "
               f"애매 구간 {len(borderline_pairs)}쌍 전부 '안 묶음' 기본값 유지")
         return []
 
@@ -641,10 +641,9 @@ def group_issues(articles: list[dict], model=None, deadline: float | None = None
 
     if model is None:
         # 모델이 안 주어졌으면(예: 아직 설치 전 단계 테스트) 2차 없이
-        # 1차 결과 + 나머지를 단독 그룹으로 반환 - to_singleton_groups와
-        # 동일한 안전한 fallback (2차가 없으면 3차의 재료인 borderline_pairs
-        # 자체가 안 생기므로 3차도 자연히 생략됨)
-        print("[issue_grouper] 🟡 주의 [IG-05] - 임베딩 모델이 없어 2차(임베딩) 매칭 생략 - 1차 결과만 사용")
+        # 1차 결과 + 나머지를 단독 그룹으로 반환하는 안전한 fallback
+        # (2차가 없으면 3차의 재료인 borderline_pairs 자체가 안 생기므로 3차도 자연히 생략됨)
+        print("[issue_grouper] 🟡 주의 [IG-09] - 임베딩 모델이 없어 2차(임베딩) 매칭 생략 - 1차 결과만 사용")
         singleton = [[a] for a in stage1_unmatched]
         return [_sort_group_by_representative(g) for g in stage1_grouped + singleton]
 
@@ -765,7 +764,7 @@ def _merge_confirmed_components(components: list[list[dict]],
         else:
             recheck_note = ("빠진 쌍을 추가로 재확인했지만 여전히 일부는 직접 확인 안 됨"
                              if extra_confirm is not None else "일부 쌍은 LLM에 직접 확인된 적 없음")
-            print(f"[issue_grouper] 🟡 주의 [IG-06] - 3차 확정 쌍이 사슬로만 연결됨(컴포넌트 "
+            print(f"[issue_grouper] 🟡 주의 [IG-10] - 3차 확정 쌍이 사슬로만 연결됨(컴포넌트 "
                   f"{len(indices)}개 - {recheck_note}) - 연쇄 병합 방지로 안 묶고 개별 유지")
             for idx in indices:
                 merged_components.append(components[idx])

@@ -54,10 +54,10 @@ if "openrouter/free" not in [m for _, m in _LLM_MODEL_CHAIN_OPENROUTER_ROLES]:
 
 # 순위 라벨 -> 실패 시 찍을 오류 코드
 _LLM_MODEL_ROLE_ERROR_CODE = {
-    "1순위": "RF-07",
-    "2순위": "RF-08",
-    "3순위": "RF-09",
-    "최종 안전망": "RF-10",
+    "1순위": "RF-01",
+    "2순위": "RF-02",
+    "3순위": "RF-03",
+    "최종 안전망": "RF-04",
 }
 
 # 하위호환용 - 모델명만 뽑은 리스트
@@ -233,7 +233,7 @@ def _request_llm_text(system_prompt: str, user_prompt: str, api_key: str, sessio
       - 특정 모델 하나의 문제가 이 함수를 부른 기능(관련성 필터/재분류/그룹핑/요약) 전체를 막지 않게 함.
       - 최종 안전망까지 실패하면 예외를 올려보냄 - 호출부가 "배치 전체 안전 처리"로 흡수.
 
-    오류 코드를 역할별로 고정(RF-07~10)해서 어느 순위가 실패했는지 grep으로 바로 확인 가능.
+    오류 코드를 역할별로 고정(RF-01~04)해서 어느 순위가 실패했는지 grep으로 바로 확인 가능.
     최종 안전망 실패는 🔴 조치필요, 그 전 순위 실패는 자동 복구되는 경로라 🟡 주의.
 
     validate 콜백: 호출은 성공했는데 응답 형식이 이상한 경우도 호출 실패와 동일하게 취급해 같은 재시도 체인에 태운다.
@@ -269,8 +269,8 @@ def _call_llm(batch: list[dict], api_key: str, session: requests.Session) -> lis
     session: filter_articles가 배치마다 반복 호출하므로 재사용해 커넥션 오버헤드 절감.
 
     형식 이상/id 누락 모두 모델 체인 재시도 대상(_request_llm_text의 validate로 처리)
-      - 최종 안전망까지 갔는데도 id가 누락되면 예외 대신 있는 만큼만 살리고 나머지는 안전한 기본값(통과)으로 채운다(RF-02 로그).
-      - 완전 포기(RF-01)보다 부분 성공이 낫다는 원칙.
+      - 최종 안전망까지 갔는데도 id가 누락되면 예외 대신 있는 만큼만 살리고 나머지는 안전한 기본값(통과)으로 채운다(RF-05 로그).
+      - 완전 포기(RF-06)보다 부분 성공이 낫다는 원칙.
     """
     user_prompt = _build_user_prompt(batch)
 
@@ -300,7 +300,7 @@ def _call_llm(batch: list[dict], api_key: str, session: requests.Session) -> lis
 
         results = [by_id.get(idx, True) for idx in range(1, len(batch) + 1)]  # 안전한 기본값 - 통과
         if missing:
-            print(f"[relevance_filter] 🟡 주의 [RF-02] - 관련성 필터 최종 안전망까지 갔지만 id {missing} "
+            print(f"[relevance_filter] 🟡 주의 [RF-05] - 관련성 필터 최종 안전망까지 갔지만 id {missing} "
                   f"여전히 누락(기대 {len(batch)}건 중 {len(missing)}건) - 그 항목들만 통과 처리, "
                   f"나머지 {len(batch) - len(missing)}건은 정상 판정 사용")
         return results
@@ -308,7 +308,7 @@ def _call_llm(batch: list[dict], api_key: str, session: requests.Session) -> lis
     try:
         return _request_llm_text(_SYSTEM_PROMPT, user_prompt, api_key, session, "관련성 필터", validate=_validate)
     except Exception as e:
-        print(f"[relevance_filter] 🔴 조치필요 [RF-01] - LLM({LLM_PROVIDER}) 호출/파싱 실패 - 이 배치"
+        print(f"[relevance_filter] 🔴 조치필요 [RF-06] - LLM({LLM_PROVIDER}) 호출/파싱 실패 - 이 배치"
               f"({len(batch)}건) 전부 통과 처리: {type(e).__name__} - {e!r}")
         return None
 
@@ -327,7 +327,7 @@ def filter_articles(articles: list[dict], deadline: float | None = None) -> list
 
     ** 소스가 네이버/GDELT가 아니면 LLM 호출 없이 자동 통과 **
     이 프로젝트는 실제로는 네이버/GDELT 두 소스뿐이라 지금은 해당 사항이 없지만(코드상
-    watt_articles는 항상 빈 리스트), 업계 전문지처럼 이 필터가 잡으려는 오매칭 유형(동음
+    other_source_articles는 항상 빈 리스트), 업계 전문지처럼 이 필터가 잡으려는 오매칭 유형(동음
     이의어 등)이 구조적으로 해당 안 되는 소스가 나중에 추가될 경우를 대비해 조건 자체는
     남겨둠 - keyword_tagger.py의 site_category 판단 조건(source not in ("네이버", "GDELT"))과
     동일 조건 재사용. 같은 취약점도 그대로 적용됨(그런 소스가 추가되면 검증 없이 자동
@@ -337,28 +337,28 @@ def filter_articles(articles: list[dict], deadline: float | None = None) -> list
     if not articles:
         return articles
 
-    watt_articles = [a for a in articles if a.get("source") not in ("네이버", "GDELT")]
+    other_source_articles = [a for a in articles if a.get("source") not in ("네이버", "GDELT")]
     llm_target_articles = [a for a in articles if a.get("source") in ("네이버", "GDELT")]
 
-    if watt_articles:
-        print(f"[relevance_filter] 네이버/GDELT 외 소스 {len(watt_articles)}건은 LLM 호출 없이 자동 통과")
+    if other_source_articles:
+        print(f"[relevance_filter] 네이버/GDELT 외 소스 {len(other_source_articles)}건은 LLM 호출 없이 자동 통과")
 
     if not llm_target_articles:
-        return watt_articles
+        return other_source_articles
 
     key_env_var = "OPENROUTER_API_KEY" if LLM_PROVIDER == "openrouter" else "ANTHROPIC_API_KEY"
     api_key = os.environ.get(key_env_var)
     if not api_key:
-        print(f"[relevance_filter] 🔴 조치필요 [RF-03] - {key_env_var} 없음(LLM_PROVIDER={LLM_PROVIDER}) - "
+        print(f"[relevance_filter] 🔴 조치필요 [RF-07] - {key_env_var} 없음(LLM_PROVIDER={LLM_PROVIDER}) - "
               f"관련성 필터 생략, {len(llm_target_articles)}건(네이버/GDELT) 전부 통과")
         return articles
 
     model_desc = " -> ".join(LLM_MODEL_CHAIN_OPENROUTER) if LLM_PROVIDER == "openrouter" else "Anthropic Claude"
     print(f"[relevance_filter] 관련성 필터 시작 - provider={LLM_PROVIDER}, "
           f"model={model_desc}, 대상 {len(llm_target_articles)}건(네이버/GDELT만, "
-          f"그 외 소스 {len(watt_articles)}건 제외)")
+          f"그 외 소스 {len(other_source_articles)}건 제외)")
 
-    kept = list(watt_articles)
+    kept = list(other_source_articles)
     dropped_samples = []
     total_batches = (len(llm_target_articles) + BATCH_SIZE - 1) // BATCH_SIZE
     effective_deadline = deadline if deadline is not None else time.monotonic() + TIME_BUDGET_SECONDS
@@ -391,7 +391,7 @@ def filter_articles(articles: list[dict], deadline: float | None = None) -> list
 
     dropped_count = len(articles) - len(kept)
     print(f"[relevance_filter] 관련성 필터 완료 - 전체 {len(articles)}건(그 외 소스 자동통과 "
-          f"{len(watt_articles)}건 포함) 중 {dropped_count}건 제외, {len(kept)}건 유지"
+          f"{len(other_source_articles)}건 포함) 중 {dropped_count}건 제외, {len(kept)}건 유지"
           + (f" (시간 예산 소진으로 {skipped_count}건 미검증 통과 포함)" if skipped_count else ""))
     if dropped_samples:
         sample_n = min(10, len(dropped_samples))
@@ -455,7 +455,7 @@ def _call_category_llm(batch: list[dict], api_key: str, session: requests.Sessio
     다른 점: 응답이 bool이 아니라 category_choices 중 하나(또는 "기타") 문자열이어야 하고, 목록에 없는 값은 개별 항목만 무시(안 바뀜="기타" 유지, id 누락과 동일하게 처리).
 
     형식 이상/id 누락 모두 모델 체인 재시도 대상 - 최종 안전망까지 갔는데도 누락이면 있는 만큼만
-    살리고 나머지는 "기타"로 채워 반환(RF-05 로그) - 완전 포기(RF-04)보다 부분 성공이 낫다는 원칙.
+    살리고 나머지는 "기타"로 채워 반환(RF-08 로그) - 완전 포기(RF-09)보다 부분 성공이 낫다는 원칙.
     """
 
     user_prompt = _build_category_user_prompt(batch)
@@ -489,7 +489,7 @@ def _call_category_llm(batch: list[dict], api_key: str, session: requests.Sessio
 
         results = [by_id.get(idx, "기타") for idx in range(1, len(batch) + 1)]
         if missing:
-            print(f"[relevance_filter] 🟡 주의 [RF-05] - 카테고리 재분류 최종 안전망까지 갔지만 id {missing} "
+            print(f"[relevance_filter] 🟡 주의 [RF-08] - 카테고리 재분류 최종 안전망까지 갔지만 id {missing} "
                   f"여전히 누락(기대 {len(batch)}건 중 {len(missing)}건) - 그 항목들만 "
                   f"'기타' 유지, 나머지 {len(batch) - len(missing)}건은 정상 판정 사용")
         return results
@@ -497,7 +497,7 @@ def _call_category_llm(batch: list[dict], api_key: str, session: requests.Sessio
     try:
         return _request_llm_text(system_prompt, user_prompt, api_key, session, "카테고리 재분류", validate=_validate)
     except Exception as e:
-        print(f"[relevance_filter] 🔴 조치필요 [RF-04] - 카테고리 재분류 LLM({LLM_PROVIDER}) 호출/파싱 실패 - "
+        print(f"[relevance_filter] 🔴 조치필요 [RF-09] - 카테고리 재분류 LLM({LLM_PROVIDER}) 호출/파싱 실패 - "
               f"이 배치({len(batch)}건) 전부 '기타' 유지: {type(e).__name__} - {e!r}")
         return None
 
@@ -516,7 +516,7 @@ def recategorize_uncategorized(articles: list[dict], deadline: float | None = No
     key_env_var = "OPENROUTER_API_KEY" if LLM_PROVIDER == "openrouter" else "ANTHROPIC_API_KEY"
     api_key = os.environ.get(key_env_var)
     if not api_key:
-        print(f"[relevance_filter] 🔴 조치필요 [RF-06] - {key_env_var} 없음(LLM_PROVIDER={LLM_PROVIDER}) - "
+        print(f"[relevance_filter] 🔴 조치필요 [RF-10] - {key_env_var} 없음(LLM_PROVIDER={LLM_PROVIDER}) - "
               f"카테고리 재분류 생략, {len(targets)}건 '기타' 그대로 유지")
         return articles
 

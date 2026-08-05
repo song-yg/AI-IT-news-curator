@@ -145,7 +145,7 @@ def _call_llm(system_prompt: str, user_prompt: str, api_key: str, session: reque
     try:
         if _ig.LLM_PROVIDER == "openrouter":
             chain = _ig._LLM_MODEL_CHAIN_OPENROUTER_ROLES
-            role_codes = {"1순위": "LS-02", "2순위": "LS-03", "3순위": "LS-04", "최종 안전망": "LS-05"}
+            role_codes = {"1순위": "LS-01", "2순위": "LS-02", "3순위": "LS-03", "최종 안전망": "LS-04"}
             last_error: Exception | None = None
             for idx, (role, model_name) in enumerate(chain):
                 try:
@@ -169,7 +169,7 @@ def _call_llm(system_prompt: str, user_prompt: str, api_key: str, session: reque
     except Exception as e:
         # data가 있으면(HTTP는 성공했는데 예상 필드를 못 찾은 경우) 실제 응답을 잘라서 같이 남김
         snippet = (" ".join(str(data).split())[:200] + "...") if data is not None else "(응답을 아예 못 받음 - 요청/인증 단계에서 실패)"
-        print(f"[llm_summarizer] 🔴 조치필요 [LS-01] - LLM({_ig.LLM_PROVIDER}) 호출 실패: {type(e).__name__} - {e!r} "
+        print(f"[llm_summarizer] 🔴 조치필요 [LS-05] - LLM({_ig.LLM_PROVIDER}) 호출 실패: {type(e).__name__} - {e!r} "
               f"| 실제 응답: {snippet}")
         return None
 

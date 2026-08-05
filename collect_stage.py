@@ -34,6 +34,7 @@ import time
 import traceback
 
 import main as main_module  # run_collectors, _compute_collection_window 재사용
+import error_log
 
 OUTPUT_DIR = "collect_output"
 OUTPUT_PATH = os.path.join(OUTPUT_DIR, "collected.json")
@@ -51,6 +52,9 @@ def run() -> None:
     window_start, window_end = main_module._compute_collection_window()
     print(f"[collect_stage] 이번 실행 수집 구간: {window_start.isoformat()} ~ {window_end.isoformat()} (UTC)")
 
+    # 이 Job에서 발생한 "🔴 조치필요" 코드도 collected.json에 같이 실어서, process Job의
+    # 이메일 하단 표시에 합쳐지게 한다(별도 프로세스라 메모리 공유가 안 되므로 파일로 전달).
+    error_log.start_capture()
     try:
         articles, gdelt_timeline, failed_sources = main_module.run_collectors(
             window_start, window_end, deadline=deadline_gdelt)
@@ -63,6 +67,7 @@ def run() -> None:
               f"{type(e).__name__} - {e!r}")
         traceback.print_exc()
         articles, gdelt_timeline, failed_sources = [], {}, ["네이버", "GDELT"]
+    error_codes = error_log.stop_capture()
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     payload = {
@@ -71,6 +76,7 @@ def run() -> None:
         "failed_sources": failed_sources,
         "window_start": window_start.isoformat(),
         "window_end": window_end.isoformat(),
+        "error_codes": error_codes,
     }
     try:
         with open(OUTPUT_PATH, "w", encoding="utf-8") as f:

@@ -56,7 +56,7 @@ def _humanize_day_label(day_label: str) -> str:
     try:
         day = date.fromisoformat(day_label)
     except (ValueError, TypeError) as e:
-        print(f"[deploy] 🟡 주의 [DP-05] - day_label 형식 변환 실패({day_label!r}) - "
+        print(f"[deploy] 🟡 주의 [DP-01] - day_label 형식 변환 실패({day_label!r}) - "
               f"원본 그대로 사용: {type(e).__name__} - {e!r}")
         return day_label
 
@@ -225,10 +225,16 @@ def render_email_html(day_label: str, domestic_summarized: list[dict], internati
                        domestic_by_category: dict[str, list[dict]],
                        international_by_category: dict[str, list[dict]],
                        failed_sources: list[str],
-                       category_comparison: dict[str, dict[str, dict]] | None = None) -> str:
+                       category_comparison: dict[str, dict[str, dict]] | None = None,
+                       error_codes: list[str] | None = None) -> str:
     """
     scored.json 데이터로 이메일 본문 HTML 생성. 폭 1000px, 옅은 회색 배경 위
     흰색 콘텐츠 카드, 국내/해외 좌우 2단 레이아웃.
+
+    error_codes: 이번 실행에서 발생한 "🔴 조치필요" 등급 오류 코드 목록(error_log.py가 stdout에서
+    자동 수집, 중복 제거·등장 순서). 자세한 메시지 없이 코드만, 맨 아래 아주 작은 글씨로 표시 -
+    운영자가 훑어보다가 뭔가 있었는지만 눈치채면 되는 용도라 본문 가독성을 해치지 않게
+    최대한 눈에 안 띄게 둔다.
     """
     header_html = f"""
     <div style="background:{HEADER_BG}; padding:26px 32px; border-radius:10px 10px 0 0;">
@@ -283,6 +289,14 @@ def render_email_html(day_label: str, domestic_summarized: list[dict], internati
         '정확한 내용은 원문 링크를 확인해주세요.</p>'
     )
 
+    if error_codes:
+        # 자세한 메시지는 콘솔 로그에만 남기고, 여기는 코드만 - 운영자용 참고 표시라
+        # 위 정식 푸터보다도 더 작고 옅게(9px, 아주 연한 회색) 둬서 눈에 잘 안 띄게 한다.
+        parts.append(
+            f'<p style="margin-top:6px; font-size:9px; color:#ddd; text-align:center;">'
+            f'{_escape(", ".join(error_codes))}</p>'
+        )
+
     parts.append('</div>')
     parts.append('</div>')
     parts.append('</div>')
@@ -304,7 +318,7 @@ def send_email(html_content: str, subject: str, recipients: list[str],
             server.login(smtp_user, smtp_app_password)
             server.sendmail(smtp_user, recipients, msg.as_string())
     except (smtplib.SMTPException, OSError) as e:
-        print(f"[deploy] 🔴 조치필요 [DP-01] - 이메일 발송 실패: {type(e).__name__} - {e!r}")
+        print(f"[deploy] 🔴 조치필요 [DP-02] - 이메일 발송 실패: {type(e).__name__} - {e!r}")
         return False
 
     print(f"[deploy] 이메일 발송 완료 -> {', '.join(recipients)}")
@@ -315,31 +329,33 @@ def send_daily_email(day_label: str, domestic_summarized: list[dict], internatio
                       domestic_by_category: dict[str, list[dict]],
                       international_by_category: dict[str, list[dict]],
                       failed_sources: list[str],
-                      category_comparison: dict[str, dict[str, dict]] | None = None) -> bool:
+                      category_comparison: dict[str, dict[str, dict]] | None = None,
+                      error_codes: list[str] | None = None) -> bool:
     """
     main.py에서 부르는 단일 진입점. GitHub Secrets에서 인증정보를 읽고, 없으면 안전하게 생략.
     day_label은 main.py의 YYYY-MM-DD 형식 그대로 받는다.
-    (예전 이름 send_weekly_email - 일간 전환하면서 리네임)
+
+    error_codes: render_email_html()에 그대로 전달 - 이메일 하단에 눈에 안 띄게 표시.
     """
     smtp_user = os.environ.get("SMTP_USER")
     smtp_app_password = os.environ.get("SMTP_APP_PASSWORD")
     recipients_raw = os.environ.get("EMAIL_RECIPIENTS")
 
     if not smtp_user or not smtp_app_password:
-        print("[deploy] 🔴 조치필요 [DP-02] - SMTP_USER/SMTP_APP_PASSWORD 없음 - 이메일 발송 생략")
+        print("[deploy] 🔴 조치필요 [DP-03] - SMTP_USER/SMTP_APP_PASSWORD 없음 - 이메일 발송 생략")
         return False
     if not recipients_raw:
-        print("[deploy] 🔴 조치필요 [DP-03] - EMAIL_RECIPIENTS 없음 - 이메일 발송 생략")
+        print("[deploy] 🔴 조치필요 [DP-04] - EMAIL_RECIPIENTS 없음 - 이메일 발송 생략")
         return False
 
     recipients = [r.strip() for r in recipients_raw.split(",") if r.strip()]
     if not recipients:
-        print("[deploy] 🔴 조치필요 [DP-04] - EMAIL_RECIPIENTS가 비어있음(콤마만 있거나 공백) - 이메일 발송 생략")
+        print("[deploy] 🔴 조치필요 [DP-05] - EMAIL_RECIPIENTS가 비어있음(콤마만 있거나 공백) - 이메일 발송 생략")
         return False
 
     html_content = render_email_html(day_label, domestic_summarized, international_summarized,
                                       domestic_by_category, international_by_category, failed_sources,
-                                      category_comparison)
+                                      category_comparison, error_codes)
     day_label_human = _humanize_day_label(day_label)
     subject = f"[AI·IT 뉴스] {day_label_human} 일간 큐레이션"
     return send_email(html_content, subject, recipients, smtp_user, smtp_app_password)

@@ -8,9 +8,6 @@ scorer.py
 이 모듈의 함수는 전부 "이슈 그룹"(같은 사건 기사 묶음, list[dict])을 입력으로 받는다.
 실제 그룹핑(BGE-M3)은 issue_grouper.group_issues()가 하고, 여기서는 결과를 스코어링만 함.
 
-`to_singleton_groups()`는 그룹핑이 없던 초기 개발 단계에 스코어링만 먼저 검증하려고 만든 테스트용 유틸.
-지금은 실제 그룹핑 결과를 바로 넘기므로 사용되지 않음.
-
 국내-해외 교차 매칭 🔗 태그는 score_group의 cross_axis_partner 필드로 구현 (main.py의 score()가 채워줌 - 상세는 score_group docstring 참고).
 """
 
@@ -128,11 +125,6 @@ def score_and_rank(groups: list[list[dict]], top_n: int | None = None) -> list[d
     scored = [score_group(g) for g in groups]
     scored.sort(key=lambda s: s["issue_score"], reverse=True)
     return scored[:top_n] if top_n is not None else scored
-
-
-def to_singleton_groups(articles: list[dict]) -> list[list[dict]]:
-    """"기사 1건 = 그룹 1개"로 변환. 현재 미사용 - 스코어링 로직만 단독 테스트할 때 쓰는 유틸."""
-    return [[a] for a in articles]
 
 
 def _is_korean_title(title: str, threshold: float = 0.2) -> bool:
