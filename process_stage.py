@@ -1,23 +1,4 @@
-"""
-process_stage.py
-Job 체이닝(2-Job 구조) 2단계 - 정규화~배포 전용 진입점.
-
-워크플로(run-pipline.yml)의 "process" Job이 이 스크립트를 실행한다. collect_stage.py가
-만든 결과(actions/download-artifact로 내려받은 collect_output/collected.json)를 읽어서
-이어받고, main.py의 run_process()(정규화~배포 본체, run()과 공유)를 그대로 호출한다.
-
-** 이 Job의 시간예산 **
-main.py.run_process()가 이미 관련성 필터(RELEVANCE_TIME_BUDGET_SECONDS, 4시간)/카테고리
-재분류(CATEGORY_RECLASSIFY_TIME_BUDGET_SECONDS, 5시간)만 예산을 두고 나머지(그룹핑/4차
-재검토/요약)는 무제한으로 처리한다 - 이 스크립트는 그 기준 시각(process_start)만 "이 Job이
-시작된 시각"으로 넘겨준다.
-
-** collect_output/collected.json이 없거나 손상됐을 때 **
-collect Job이 실패했거나(process 쪽 워크플로에 if: always()를 걸어둬서 이 Job은 그래도
-돌아감) artifact 자체가 안 만들어졌을 수 있다 - 이 경우 빈 articles로 안전하게 시작해서
-파이프라인 나머지 단계가 "오늘은 기사가 0건"인 것처럼 정상적으로(요약/저장/배포 각 단계의
-기존 안전한 기본값 그대로) 흘러가게 한다.
-"""
+"""process_stage.py - Job 체이닝 2단계: 정규화~배포 전용 진입점. collected.json을 읽어 main.run_process() 호출."""
 
 import json
 import os
@@ -31,11 +12,7 @@ INPUT_PATH = os.path.join("collect_output", "collected.json")
 
 
 def _load_collected() -> tuple[list[dict], dict, list[str], datetime, datetime, list[str]]:
-    """
-    collect_stage.py가 만든 결과를 읽어온다. 없거나 손상됐으면 안전하게 빈 값으로 시작.
-    error_codes: collect Job에서 이미 발생한 "🔴 조치필요" 코드(error_log.py 참고) -
-    이 Job에서 나는 코드와 합쳐 이메일 하단에 표시한다.
-    """
+    """collect_stage.py 결과를 읽어온다. 없거나 손상됐으면 빈 값으로 시작."""
     try:
         with open(INPUT_PATH, encoding="utf-8") as f:
             payload = json.load(f)
@@ -49,8 +26,7 @@ def _load_collected() -> tuple[list[dict], dict, list[str], datetime, datetime, 
               f"수집 구간 {window_start.isoformat()} ~ {window_end.isoformat()})")
         return articles, gdelt_timeline, failed_sources, window_start, window_end, error_codes
     except (OSError, json.JSONDecodeError, KeyError, ValueError) as e:
-        print(f"[process_stage] 🔴 조치필요 [PS-01] - collect 결과 로드 실패(collect Job이 "
-              f"실패했거나 artifact가 없는 것으로 추정) - 빈 기사로 계속 진행: "
+        print(f"[process_stage] 🔴 조치필요 [PS-01] - collect 결과 로드 실패 - 빈 기사로 계속 진행: "
               f"{type(e).__name__} - {e!r}")
         window_start, window_end = main_module._compute_collection_window()
         return [], {}, ["네이버", "GDELT"], window_start, window_end, []
@@ -58,8 +34,6 @@ def _load_collected() -> tuple[list[dict], dict, list[str], datetime, datetime, 
 
 def run() -> None:
     process_start = time.monotonic()
-    # _load_collected() 자체가 실패(PS-01)해도 그 코드가 이메일 하단에 잡히도록,
-    # run_process() 안쪽 캡처 시작 전인 이 시점부터 미리 캡처해둔다.
     error_log.start_capture()
     articles, gdelt_timeline, failed_sources, window_start, window_end, collect_error_codes = _load_collected()
     load_error_codes = error_log.stop_capture()
