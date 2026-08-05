@@ -206,6 +206,15 @@ OpenRouter 무료 티어는 기본적으로 분당 20건 + 하루 50건으로 �
 OpenRouter 계정에 $10 크레딧을 1회 선결제해서 무료 모델 하루 요청 한도를 1000건으로
 올려두는 것으로 확정했습니다(`OPENROUTER_API_KEY` 사용, `ANTHROPIC_API_KEY`는 미사용).
 
+**분당 20건 제한 대응 — `llm_rate_limiter.py`**: 실제 OpenRouter HTTP 요청 직전에
+최소 3.5초 간격(`MIN_INTERVAL_SECONDS`)을 강제하는 전역 쓰로틀러. `issue_grouper.py`/
+`relevance_filter.py`/`llm_summarizer.py` 세 모듈이 각자 독립적인 `_request_openrouter()`를
+갖고 있지만(이 프로젝트 기존 방침 - 공통 라이브러리로 무리하게 안 묶음), "마지막 호출
+시각" 하나는 이 모듈을 통해 프로세스 전체가 공유한다 - 그래야 파이프라인 단계 경계(예:
+관련성 필터 마지막 호출 직후 이슈 그룹핑 첫 호출)에서도 간격이 안 비게 된다. 모델 체인
+폴백(1순위 실패 → 2순위 시도 등)으로 한 배치 안에서 실제 HTTP 요청이 여러 번 나가는
+경우도 전부 이 간격이 적용됨(가장 안쪽의 실제 요청 함수에 붙여둠).
+
 ---
 
 ## 5. 💾 저장 레이어 — `storage.py`
@@ -263,7 +272,7 @@ GitHub Actions Job 하나(최대 6시간, GitHub 인프라 자체의 캡)에 수
 
 | 단계 | 대상 | 예산 |
 |---|---|---|
-| collect Job (Job 체이닝만 해당) | GDELT 수집(네이버 포함) | 이 Job 전체(360분, `collect_stage.COLLECT_TIME_BUDGET_SECONDS`) |
+| collect Job (Job 체이닝만 해당) | GDELT 수집(네이버 포함) | 350분(5시간 50분, `collect_stage.COLLECT_TIME_BUDGET_SECONDS`) - 나머지 10분은 체크아웃/의존성 설치/state 커밋 버퍼 |
 | `run_process()` | 관련성 필터(`filter_groups`) | 240분(4시간, `main.RELEVANCE_TIME_BUDGET_SECONDS`) |
 | `run_process()` | 카테고리 재분류(`recategorize_uncategorized_groups`) | 300분(5시간, `main.CATEGORY_RECLASSIFY_TIME_BUDGET_SECONDS`) |
 | `run_process()` | 이슈 그룹핑 1~3차 / 4차 재검토 / LLM 요약 | 무제한(`deadline=float("inf")`) |

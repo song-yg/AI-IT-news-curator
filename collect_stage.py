@@ -10,10 +10,11 @@ actions/download-artifact로 이어받는다.
 
 ** 이 Job의 시간예산 **
 GDELT 수집이 이 Job을 혼자 쓴다 - "process" Job(관련성필터~배포)과 시간을 나눠 쓰지
-않아도 되므로, GitHub Actions Job 하드 캡 그대로 6시간(360분) 전부를 GDELT에 준다
-(COLLECT_TIME_BUDGET_SECONDS). main.py.run_process()가 관련성 필터/카테고리 재분류에만
-각각 예산(4시간/5시간)을 두고 그룹핑/4차 재검토/요약은 무제한으로 처리하는 것과는 별개
-체계 - GDELT는 이제 온전히 자기 몫의 6시간을 가진다. (main.py.run() 자체는 안 건드렸음 -
+않아도 되므로, GitHub Actions Job 하드 캡(360분) 중 350분(5시간 50분)을 GDELT에 준다
+(COLLECT_TIME_BUDGET_SECONDS) - 나머지 10분은 체크아웃/의존성 설치(이 예산 추적 *전*)와
+state/ 커밋(추적 *후*) 몫으로 남겨둔 버퍼. main.py.run_process()가 관련성 필터/카테고리
+재분류에만 각각 예산(4시간/5시간)을 두고 그룹핑/4차 재검토/요약은 무제한으로 처리하는 것과는
+별개 체계 - GDELT는 이제 온전히 자기 몫의 시간을 가진다. (main.py.run() 자체는 안 건드렸음 -
 로컬에서 전체 파이프라인을 한 번에 테스트하고 싶을 때는 여전히 `python main.py`로 그대로
 쓸 수 있다.)
 
@@ -39,7 +40,8 @@ OUTPUT_PATH = os.path.join(OUTPUT_DIR, "collected.json")
 
 # 이 Job이 혼자 쓸 수 있는 최대 시간 - GitHub Actions Job 하드 캡(6시간)과 동일.
 # 그 이상 잡아봐야 어차피 Job 자체가 강제 종료되므로 의미가 없어 캡에 맞춤.
-COLLECT_TIME_BUDGET_SECONDS = 6 * 60 * 60  # 360분(6시간)
+COLLECT_TIME_BUDGET_SECONDS = 5 * 60 * 60 + 50 * 60  # 350분(5시간 50분) - Job 하드 캡(360분)에서
+# 체크아웃/의존성 설치(이 예산 추적 *전*)와 state/ 커밋(추적 *후*) 몫으로 10분을 남겨둠.
 
 
 def run() -> None:

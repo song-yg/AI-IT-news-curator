@@ -15,7 +15,7 @@
 # GitHub Actions Job 하나는 최대 6시간(360분)까지만 돌 수 있는데, 예전엔 이 6시간 안에
 # 수집~배포 전 단계를 다 우겨넣고 355분(체크포인트 5단계) 예산을 쪼개 썼다. 지금은 Job을
 # 둘로 쪼개서 각자 자기 몫의 6시간을 독립적으로 쓴다(collect_stage.py/process_stage.py 참고):
-#   - collect Job: 네이버+GDELT 수집만. GDELT가 6시간을 혼자 다 씀(COLLECT_TIME_BUDGET_SECONDS).
+#   - collect Job: 네이버+GDELT 수집만. GDELT가 350분(5시간 50분)을 혼자 다 씀(COLLECT_TIME_BUDGET_SECONDS).
 #     결과를 collected.json으로 만들어 artifact로 올림.
 #   - process Job: collect Job의 artifact를 받아 정규화~배포. 관련성 필터/카테고리
 #     재분류에만 이 Job 시작 후 4시간(RELEVANCE_TIME_BUDGET_SECONDS)을 주고, 나머지
@@ -57,9 +57,9 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    # GDELT가 이 Job을 혼자 쓸 수 있는 최대 시간과 동일(collect_stage.py의
-    # COLLECT_TIME_BUDGET_SECONDS) - GitHub 호스팅 러너 Job 하드 캡(GitHub 인프라 자체의
-    # 캡, 워크플로 설정으로 못 늘림) 그대로.
+    # GitHub 호스팅 러너 Job 하드 캡(GitHub 인프라 자체의 캡, 워크플로 설정으로 못 늘림)
+    # 그대로 360분 - GDELT 자체 예산은 350분(collect_stage.COLLECT_TIME_BUDGET_SECONDS)이라
+    # 체크아웃/의존성 설치/state 커밋 몫으로 10분 버퍼가 남음.
     timeout-minutes: 360
     permissions:
       contents: write

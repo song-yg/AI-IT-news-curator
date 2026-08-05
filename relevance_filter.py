@@ -24,6 +24,8 @@ import time
 
 import requests
 
+import llm_rate_limiter  # OpenRouter 호출 간격 제어 (모듈 간 공유)
+
 # ---------------------------------------------------------------------------
 # LLM 프로바이더 설정 - issue_grouper.py와 동일한 스위치 방식. LLM_PROVIDER=anthropic(기본) 또는 openrouter.
 # os.environ.get(key, default) 대신 or를 쓰는 이유: GitHub Actions Variables가 빈 문자열로
@@ -203,6 +205,7 @@ def _snippet_for_log(text: str, limit: int = 200) -> str:
 
 def _request_openrouter(system_prompt: str, user_prompt: str, api_key: str,
                          session: requests.Session, model_name: str) -> str:
+    llm_rate_limiter.wait_for_openrouter_slot()  # 오픈라우터 무료 티어 분당 20회 제한 대응
     headers = {
         "Authorization": f"Bearer {api_key}",
         "content-type": "application/json",

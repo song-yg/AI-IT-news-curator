@@ -356,13 +356,13 @@ def _is_in_window(dt: datetime, window_start: datetime, window_end: datetime) ->
 # 수집 하나만으로 6시간을 넘길 수 있다(실측: 키워드를 크게 늘려 테스트한
 # 실행에서 외부 재시도 1라운드까지만 4시간 소요).
 #
-# ** main.py의 파이프라인 전역 공유 예산 체계로 전환됨 **
-# 예전엔 이 상수가 "GDELT에게 6시간 중 5시간을 미리 떼어준다"는 의미였지만,
-# 지금은 main.py가 파이프라인 시작 시점에 잡은 절대 마감 시각(deadline)을
-# collect() 호출부에서 넘겨받아 쓰고, 앞 단계(네이버 수집 등)가 시간을 많이
-# 썼으면 이 단계의 실제 여유는 자동으로 줄어든다 - 아래 값은 그 deadline을
-# 못 받았을 때(예: 이 모듈만 따로 테스트)만 쓰는 이 모듈 자체의 기본값이다.
-TIME_BUDGET_SECONDS = 5 * 60 * 60  # 5시간(standalone 기본값 - 정상 실행에선 main.py의 deadline이 우선)
+# ** Job 체이닝(collect_stage.py) 체계에서는 이 상수를 안 씀 **
+# 실제 운영은 GDELT 수집 전용 collect Job이 자기 몫의 시간(350분,
+# collect_stage.COLLECT_TIME_BUDGET_SECONDS)을 deadline으로 계산해서 collect()
+# 호출부에서 넘겨준다 - 아래 값은 그 deadline을 못 받았을 때(예: 이 모듈만 따로
+# 테스트, 또는 main.py.run()의 단일 실행 로컬 테스트)만 쓰는 이 모듈 자체의
+# 기본값이라, collect_stage.py와 같은 값(5시간 50분)으로 맞춰둔다.
+TIME_BUDGET_SECONDS = 5 * 60 * 60 + 50 * 60  # 350분(5시간 50분, standalone 기본값 - 정상 실행에선 호출부의 deadline이 우선)
 
 # --- 적응형 배치 수집 ---
 #
