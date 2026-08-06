@@ -218,6 +218,11 @@ jobs:
 
       - name: 정규화~배포 실행 (process_stage.py)
         env:
+          # --- 구글 시트 카테고리 연동 (keyword_tagger.py) ---
+          # collect Job의 KEYWORD_SHEET_CSV_URL과 같은 시트지만, 카테고리 분류(keyword_tagger)는
+          # 이 Job(process)에서 실행되므로 여기에도 따로 넘겨줘야 함 - 안 그러면 process Job
+          # 입장에서 이 값이 아예 안 보여서 기본(하드코딩) 카테고리 사전으로 fallback됨.
+          KEYWORD_SHEET_CSV_URL: ${{ vars.KEYWORD_SHEET_CSV_URL }}
           # --- 3차 LLM 그룹핑 보조 / 관련성 필터 / 요약 공통 (openrouter만 사용) ---
           # OPENROUTER_MODEL_2/3는 선택사항 - 1순위 모델이 실패했을 때 자동으로 시도되는
           # 2/3순위 폴백 모델(issue_grouper.py/relevance_filter.py/llm_summarizer.py 공통
