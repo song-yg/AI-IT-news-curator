@@ -227,6 +227,10 @@ jobs:
           # 이 Job(process)에서 실행되므로 여기에도 따로 넘겨줘야 함 - 안 그러면 process Job
           # 입장에서 이 값이 아예 안 보여서 기본(하드코딩) 카테고리 사전으로 fallback됨.
           KEYWORD_SHEET_CSV_URL: ${{ vars.KEYWORD_SHEET_CSV_URL }}
+          # 테스트 시 시간 절약용 - 리포 Variables에 LLM_ENABLED=off(또는 0)를 등록하면 관련성필터/
+          # 카테고리재분류/그룹핑3차/4차재검토/요약의 LLM 호출을 전부 스킵(안전한 기본값으로 처리).
+          # 미등록 시 기본값 on.
+          LLM_ENABLED: ${{ vars.LLM_ENABLED }}
           # --- 3차 LLM 그룹핑 보조 / 관련성 필터 / 요약 공통 (openrouter만 사용) ---
           # OPENROUTER_MODEL_2/3는 선택사항 - 1순위 모델이 실패했을 때 자동으로 시도되는
           # 2/3순위 폴백 모델(issue_grouper.py/relevance_filter.py/llm_summarizer.py 공통

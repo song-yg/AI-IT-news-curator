@@ -166,6 +166,13 @@ def summarize_issue(item: dict, session: requests.Session | None = None) -> dict
     추가 필드: title_ko(한국어 제목, 실패 시 None), summary, summary_skipped_reason.
     """
     result = dict(item)
+
+    if not llm_rate_limiter.LLM_ENABLED:
+        result["summary"] = None
+        result["title_ko"] = None
+        result["summary_skipped_reason"] = "LLM_ENABLED=off - 요약 생략, 원문 제목만 노출"
+        return result
+
     titles = item.get("titles", [])
     item_for_prompt = item
 

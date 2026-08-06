@@ -247,6 +247,10 @@ def filter_articles(articles: list[dict], deadline: float | None = None) -> list
     if not llm_target_articles:
         return other_source_articles
 
+    if not llm_rate_limiter.LLM_ENABLED:
+        print(f"[relevance_filter] LLM_ENABLED=off - 관련성 필터 스킵, {len(articles)}건 전부 통과")
+        return articles
+
     key_env_var = "OPENROUTER_API_KEY"
     api_key = os.environ.get(key_env_var)
     if not api_key:
@@ -390,6 +394,10 @@ def recategorize_uncategorized(articles: list[dict], deadline: float | None = No
     if not targets:
         return articles
 
+    if not llm_rate_limiter.LLM_ENABLED:
+        print(f"[relevance_filter] LLM_ENABLED=off - 카테고리 재분류 스킵, {len(targets)}건 '기타' 유지")
+        return articles
+
     key_env_var = "OPENROUTER_API_KEY"
     api_key = os.environ.get(key_env_var)
     if not api_key:
@@ -448,6 +456,10 @@ def filter_groups(groups: list[list[dict]], deadline: float | None = None) -> li
     if not groups:
         return groups
 
+    if not llm_rate_limiter.LLM_ENABLED:
+        print(f"[relevance_filter] LLM_ENABLED=off - 관련성 필터 스킵, {len(groups)}개 그룹 전부 통과")
+        return groups
+
     key_env_var = "OPENROUTER_API_KEY"
     api_key = os.environ.get(key_env_var)
     if not api_key:
@@ -499,6 +511,10 @@ def recategorize_uncategorized_groups(groups: list[list[dict]], deadline: float 
     """그룹 대표가 "기타"인 그룹만 재분류. 재분류되면 그룹 내 "기타" 멤버 전원에게 같은 카테고리 적용."""
     targets = [g for g in groups if g[0].get("category") == "기타"]
     if not targets:
+        return groups
+
+    if not llm_rate_limiter.LLM_ENABLED:
+        print(f"[relevance_filter] LLM_ENABLED=off - 카테고리 재분류 스킵, {len(targets)}개 그룹 '기타' 유지")
         return groups
 
     key_env_var = "OPENROUTER_API_KEY"

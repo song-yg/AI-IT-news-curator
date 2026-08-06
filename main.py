@@ -21,6 +21,7 @@ import relevance_filter
 import storage
 import deploy
 import error_log
+import llm_rate_limiter
 
 _KST = timezone(timedelta(hours=9))
 
@@ -237,6 +238,9 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
     deadline_summary = float("inf")
 
     error_log.start_capture()
+
+    if not llm_rate_limiter.LLM_ENABLED:
+        print("[main] 🟡 주의 - LLM_ENABLED=off - 이번 실행은 모든 LLM 호출(관련성필터/카테고리재분류/그룹핑3차/4차재검토/요약)을 스킵합니다")
 
     print("\n=== [2] 정규화 ===")
     try:

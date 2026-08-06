@@ -358,6 +358,11 @@ def stage3_llm_assist(borderline_pairs: list[tuple[dict, dict, float]],
     if not borderline_pairs:
         return []
 
+    if not llm_rate_limiter.LLM_ENABLED:
+        print(f"[issue_grouper] LLM_ENABLED=off - 3차 LLM 보조 스킵, "
+              f"애매 구간 {len(borderline_pairs)}쌍 전부 '안 묶음' 기본값 유지")
+        return []
+
     key_env_var = "OPENROUTER_API_KEY"
     api_key = os.environ.get(key_env_var)
     if not api_key:
@@ -630,6 +635,12 @@ def stage4_dedupe_and_promote(ranked_pool: list[dict], top_n: int, label: str = 
     if len(candidates) < 2:
         return candidates
 
+    prefix = f"[issue_grouper] {label} " if label else "[issue_grouper] "
+
+    if not llm_rate_limiter.LLM_ENABLED:
+        print(f"{prefix}LLM_ENABLED=off - 4차 Top N 재검토 스킵(기존 순위 그대로 사용)")
+        return candidates
+
     key_env_var = "OPENROUTER_API_KEY"
     api_key = os.environ.get(key_env_var)
     if not api_key:
@@ -637,7 +648,6 @@ def stage4_dedupe_and_promote(ranked_pool: list[dict], top_n: int, label: str = 
               f"4차 Top N 재검토 생략(기존 순위 그대로 사용)")
         return candidates
 
-    prefix = f"[issue_grouper] {label} " if label else "[issue_grouper] "
     max_rounds = 3
     merged_any = False
 
