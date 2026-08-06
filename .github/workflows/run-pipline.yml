@@ -21,7 +21,7 @@
 #     재분류에만 이 Job 시작 후 4시간(RELEVANCE_TIME_BUDGET_SECONDS)을 주고, 나머지
 #     (그룹핑/4차 재검토/요약)는 시간예산 없이(무제한) 돈다 - TOP_N이 고정값이라 수집량과
 #     무관하게 규모가 안 커져서 상대적으로 안전하다고 판단.
-# collect Job이 실패해도 process Job은 그래도 돈다(아래 `if: always()` 참고) - 빈 기사로
+# collect Job이 실패해도 process Job은 그래도 돈다(아래 `if: !cancelled()` 참고) - 빈 기사로
 # 그날 실행이 통째로 없어지는 대신 "오늘은 기사 0건"으로 안전하게 흘러가게 함.
 #
 # 실행 방법: GitHub 리포 > Actions 탭 > "AI-IT 큐레이션 파이프라인 실행" 선택 > "Run workflow" 버튼 클릭 > 메모(선택) 입력 후 실행
@@ -139,7 +139,11 @@ jobs:
     # collected.json이 없거나 손상된 경우를 스스로 방어(빈 articles로 시작)하므로, 이
     # Job은 항상 시도해보는 쪽이 안전하다(collect_stage.py 상단 독스트링 "실패해도 절대
     # 죽지 않는다" 참고).
-    if: always()
+    # always() 대신 !cancelled() 사용 - always()는 워크플로를 수동 취소해도 조건이 계속
+    # true로 재평가돼서 취소 자체가 안 먹히는 문제가 있음(GitHub 공식 문서에 명시된 동작).
+    # !cancelled()는 collect Job의 성공/실패 여부와 무관하게 돈다는 목적은 그대로 유지하면서,
+    # 사용자가 명시적으로 취소했을 때는 정상적으로 같이 멈춘다.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     # 관련성 필터(4시간, process_stage.py의 RELEVANCE_TIME_BUDGET_SECONDS)만 예산이 있고
     # 나머지(그룹핑/4차 재검토/요약)는 무제한이라 이론적으로는 6시간을 넘길 수도 있는
