@@ -1,9 +1,11 @@
 """deploy.py - Gmail SMTP로 오늘 큐레이션 결과를 HTML 이메일로 발송(main.py [6]에서 send_daily_email() 호출)."""
 
+import base64
 import html
 import os
 import smtplib
 from datetime import date
+from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -18,6 +20,8 @@ DOMESTIC_PILL_BG = "#e8f0fe"
 INTERNATIONAL_PILL_BG = "#f3ebfd"
 
 HEADER_BG = f"linear-gradient(120deg, {DOMESTIC_ACCENT} 0%, {INTERNATIONAL_ACCENT} 100%)"
+
+CATEGORY_CHART_CID = {"국내": "domestic_category_chart", "해외": "international_category_chart"}
 
 
 def _escape(value) -> str:
@@ -252,7 +256,7 @@ def render_email_html(day_label: str, domestic_summarized: list[dict], internati
     if category_charts:
         parts.append(section_header("카테고리별 최근 7일 추이"))
         chart_cell = lambda axis: (
-            f'<img src="data:image/png;base64,{category_charts[axis]}" '
+            f'<img src="cid:{CATEGORY_CHART_CID[axis]}" '
             f'style="width:100%; max-width:480px; height:auto; display:block;" alt="{axis} 카테고리 추이">'
             if axis in category_charts else '<p style="font-size:13px; color:#999; margin:4px 0;">(그래프 없음)</p>'
         )
@@ -296,13 +300,34 @@ def render_email_html(day_label: str, domestic_summarized: list[dict], internati
 
 
 def send_email(html_content: str, subject: str, recipients: list[str],
-               smtp_user: str, smtp_app_password: str) -> bool:
-    """Gmail SMTP(587, STARTTLS)로 HTML 이메일 발송."""
-    msg = MIMEMultipart("alternative")
+               smtp_user: str, smtp_app_password: str,
+               inline_images: dict[str, str] | None = None) -> bool:
+    """
+    Gmail SMTP(587, STARTTLS)로 HTML 이메일 발송.
+    inline_images: {content_id: base64 PNG 문자열} - HTML의 cid:{content_id} 참조와 매칭되는
+    인라인 첨부 이미지. base64 data URI로 직접 박아 넣는 방식은 Gmail이 렌더링을 차단해서
+    (아웃룩은 되지만 Gmail은 안 됨 - 실제로 이 문제로 그래프가 깨진 이미지로 나온 적 있음)
+    MIME 첨부 + Content-ID 참조 방식으로 전환함.
+    """
+    msg = MIMEMultipart("related")
     msg["Subject"] = subject
     msg["From"] = smtp_user
     msg["To"] = ", ".join(recipients)
-    msg.attach(MIMEText(html_content, "html", "utf-8"))
+
+    msg_alternative = MIMEMultipart("alternative")
+    msg.attach(msg_alternative)
+    msg_alternative.attach(MIMEText(html_content, "html", "utf-8"))
+
+    for content_id, png_base64 in (inline_images or {}).items():
+        try:
+            image = MIMEImage(base64.b64decode(png_base64), _subtype="png")
+        except Exception as e:
+            print(f"[deploy] 🟡 주의 [DP-02] - 인라인 이미지 '{content_id}' 디코딩 실패, 첨부 생략: "
+                  f"{type(e).__name__} - {e!r}")
+            continue
+        image.add_header("Content-ID", f"<{content_id}>")
+        image.add_header("Content-Disposition", "inline", filename=f"{content_id}.png")
+        msg.attach(image)
 
     try:
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
@@ -310,7 +335,7 @@ def send_email(html_content: str, subject: str, recipients: list[str],
             server.login(smtp_user, smtp_app_password)
             server.sendmail(smtp_user, recipients, msg.as_string())
     except (smtplib.SMTPException, OSError) as e:
-        print(f"[deploy] 🔴 조치필요 [DP-02] - 이메일 발송 실패: {type(e).__name__} - {e!r}")
+        print(f"[deploy] 🔴 조치필요 [DP-03] - 이메일 발송 실패: {type(e).__name__} - {e!r}")
         return False
 
     print(f"[deploy] 이메일 발송 완료 -> {', '.join(recipients)}")
@@ -330,15 +355,15 @@ def send_daily_email(day_label: str, domestic_summarized: list[dict], internatio
     recipients_raw = os.environ.get("EMAIL_RECIPIENTS")
 
     if not smtp_user or not smtp_app_password:
-        print("[deploy] 🔴 조치필요 [DP-03] - SMTP_USER/SMTP_APP_PASSWORD 없음 - 이메일 발송 생략")
+        print("[deploy] 🔴 조치필요 [DP-04] - SMTP_USER/SMTP_APP_PASSWORD 없음 - 이메일 발송 생략")
         return False
     if not recipients_raw:
-        print("[deploy] 🔴 조치필요 [DP-04] - EMAIL_RECIPIENTS 없음 - 이메일 발송 생략")
+        print("[deploy] 🔴 조치필요 [DP-05] - EMAIL_RECIPIENTS 없음 - 이메일 발송 생략")
         return False
 
     recipients = [r.strip() for r in recipients_raw.split(",") if r.strip()]
     if not recipients:
-        print("[deploy] 🔴 조치필요 [DP-05] - EMAIL_RECIPIENTS가 비어있음 - 이메일 발송 생략")
+        print("[deploy] 🔴 조치필요 [DP-06] - EMAIL_RECIPIENTS가 비어있음 - 이메일 발송 생략")
         return False
 
     html_content = render_email_html(day_label, domestic_summarized, international_summarized,
@@ -346,4 +371,10 @@ def send_daily_email(day_label: str, domestic_summarized: list[dict], internatio
                                       category_comparison, error_codes, category_charts)
     day_label_human = _humanize_day_label(day_label)
     subject = f"[AI·IT 뉴스] {day_label_human} 일간 큐레이션"
-    return send_email(html_content, subject, recipients, smtp_user, smtp_app_password)
+
+    inline_images = {
+        CATEGORY_CHART_CID[axis]: png_base64
+        for axis, png_base64 in (category_charts or {}).items()
+        if axis in CATEGORY_CHART_CID
+    }
+    return send_email(html_content, subject, recipients, smtp_user, smtp_app_password, inline_images)
