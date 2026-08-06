@@ -326,7 +326,9 @@ GitHub Actions Job 하나(최대 6시간, GitHub 인프라 자체의 캡)에 수
 |---|---|---|---|
 | `NAVER_CLIENT_ID` | Secret | 네이버 뉴스 검색 API 인증 | `naver_collector.py` |
 | `NAVER_CLIENT_SECRET` | Secret | 위 ID와 짝을 이루는 비밀키 | `naver_collector.py` |
-| `KEYWORD_SHEET_CSV_URL` | Variable | 구글 시트(공개 게시 CSV)에서 검색 키워드를 읽어오는 URL | 없으면 각 collector의 하드코딩 fallback 키워드 사용 |
+| `KEYWORD_SHEET_CSV_URL` | Variable | 구글 시트(공개 게시 CSV)에서 검색 키워드/카테고리를 읽어오는 URL | 없으면 각 collector/`keyword_tagger.py`의 하드코딩 fallback 사용 |
+| `AUTO_RUN_ENABLED` | Variable | 매일 자정 자동(스케줄) 실행 온오프 스위치 | `off`/`0`이면 자동 실행만 건너뜀(수동 실행은 무관하게 항상 돎), 기본 on |
+| `LLM_ENABLED` | Variable | 관련성필터/카테고리재분류/그룹핑3차/4차재검토/요약의 LLM 호출 온오프 스위치 | `off`/`0`이면 LLM 호출 전부 스킵(테스트 시간 절약용), 기본 on |
 | `OPENROUTER_API_KEY` | Secret | OpenRouter API 키 | $10 선결제 크레딧이 연결된 계정 키(하루 요청 한도 1000건) |
 | `OPENROUTER_MODEL` | Variable | OpenRouter 1순위 모델명 | 비우면 자동 라우터(`openrouter/free`) |
 | `OPENROUTER_MODEL_2` | Variable | 1순위 실패 시 2순위 모델 | 선택 |

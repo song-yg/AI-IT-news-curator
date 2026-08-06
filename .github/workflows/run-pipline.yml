@@ -11,6 +11,12 @@
 #      on: push는 의도적으로 안 씀 - 이 파이프라인은 실행될 때마다 실제 이메일 발송 + LLM 호출량(일일 한도 있는 프로바이더 포함) 소모 + 데이터 커밋이 일어나서,
 #      단순 코드 수정 커밋마다 전체가 돌아버리면 테스트/실제 실행이 뒤섞이는 문제가 생김.
 #
+# ** 자동(스케줄) 실행 온오프 스위치 **
+# 리포 Variables에 AUTO_RUN_ENABLED=off(또는 0)를 등록하면 매일 자정 자동 실행을
+# 건너뛴다(collect/process 두 Job 모두 skip) - 워크플로 자체를 끄거나 cron을 지우지 않고도
+# "오늘은 쉬기"가 가능. 미등록 시 기본값 on. 수동 실행(workflow_dispatch)은 이 스위치와
+# 무관하게 항상 돈다 - 수동 실행 자체가 이미 명시적 의도 표현이라 막을 이유가 없음.
+#
 # ** Job 체이닝(2-Job 구조) **
 # GitHub Actions Job 하나는 최대 6시간(360분)까지만 돌 수 있는데, 예전엔 이 6시간 안에
 # 수집~배포 전 단계를 다 우겨넣고 355분(체크포인트 5단계) 예산을 쪼개 썼다. 지금은 Job을
@@ -57,6 +63,11 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
+    # 자동(스케줄) 실행 온오프 스위치 - 리포 Variables에 AUTO_RUN_ENABLED=off(또는 0)를
+    # 등록하면 매일 자정 자동 실행을 건너뛴다(워크플로 자체를 끄지 않고도 "오늘은 쉬기"가
+    # 가능). 수동 실행(workflow_dispatch)은 이 스위치와 무관하게 항상 돈다 - 수동 실행
+    # 자체가 이미 명시적 의도 표현이라 막을 이유가 없음. 미등록 시 기본값 on.
+    if: ${{ github.event_name != 'schedule' || (vars.AUTO_RUN_ENABLED != 'off' && vars.AUTO_RUN_ENABLED != '0') }}
     # GitHub 호스팅 러너 Job 하드 캡(GitHub 인프라 자체의 캡, 워크플로 설정으로 못 늘림)
     # 그대로 360분 - GDELT 자체 예산은 350분(collect_stage.COLLECT_TIME_BUDGET_SECONDS)이라
     # 체크아웃/의존성 설치/state 커밋 몫으로 10분 버퍼가 남음.
@@ -143,7 +154,10 @@ jobs:
     # true로 재평가돼서 취소 자체가 안 먹히는 문제가 있음(GitHub 공식 문서에 명시된 동작).
     # !cancelled()는 collect Job의 성공/실패 여부와 무관하게 돈다는 목적은 그대로 유지하면서,
     # 사용자가 명시적으로 취소했을 때는 정상적으로 같이 멈춘다.
-    if: ${{ !cancelled() }}
+    # 뒤의 조건은 collect Job과 동일한 자동실행 온오프 스위치 - collect가 스위치 때문에
+    # 스킵됐어도(스킵은 취소가 아니라서 !cancelled()만으로는 안 걸러짐) process까지 같이
+    # 스킵되도록 동일 조건을 반복해서 건다.
+    if: ${{ !cancelled() && (github.event_name != 'schedule' || (vars.AUTO_RUN_ENABLED != 'off' && vars.AUTO_RUN_ENABLED != '0')) }}
     runs-on: ubuntu-latest
     # 관련성 필터(4시간, process_stage.py의 RELEVANCE_TIME_BUDGET_SECONDS)만 예산이 있고
     # 나머지(그룹핑/4차 재검토/요약)는 무제한이라 이론적으로는 6시간을 넘길 수도 있는
