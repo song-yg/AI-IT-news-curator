@@ -189,10 +189,9 @@ naver/gdelt 키워드와 같은 시트)의 **category 열**에서 읽어오고(`
   JSON 형식을 안 지키면(무료 모델에서 가끔 발생) 제목 번역만 포기하고 요약은 그대로 살림.
   단독 기사가 재료 부족으로 요약 자체가 생략되는 경로에서는 제목 번역도 같이 생략됨(원문
   제목 그대로 노출)
-- 프로바이더: 코드 기본값은 Anthropic(`claude-haiku-4-5-20251001`)이지만, 현재 운영은
-  `LLM_PROVIDER=openrouter`로 전환해서 사용 중 — OpenRouter 계정에 $10 크레딧을 선결제해
-  무료 모델 하루 요청 한도를 1000건까지 올려둔 상태(아래 참고)
-- OpenRouter 경로는 `OPENROUTER_MODEL`(1순위) → `OPENROUTER_MODEL_2`(2순위, 선택) →
+- 프로바이더: OpenRouter 전용(Anthropic 경로는 완전히 제거함) — 계정에 $10 크레딧을
+  선결제해 무료 모델 하루 요청 한도를 1000건까지 올려둔 상태(아래 참고)
+- `OPENROUTER_MODEL`(1순위) → `OPENROUTER_MODEL_2`(2순위, 선택) →
   `OPENROUTER_MODEL_3`(3순위, 선택) → `openrouter/free`(최종 안전망) 순으로 시도
   (`issue_grouper.py`/`relevance_filter.py`/`llm_summarizer.py` 세 곳 동일 구조 공유)
 - API 호출 실패 시 요약 없이 원문 제목 + 링크만 노출(파이프라인은 죽지 않음)
@@ -206,7 +205,8 @@ OpenRouter 무료 티어는 기본적으로 분당 20건 + 하루 50건으로 �
 카테고리 재분류+3차 그룹핑+요약을 합치면 한 번 실행에 수십 건의 LLM 호출이 발생해
 크레딧 없는 계정은 실행 1회로 하루 상한을 넘길 수 있었습니다. 이를 해결하기 위해
 OpenRouter 계정에 $10 크레딧을 1회 선결제해서 무료 모델 하루 요청 한도를 1000건으로
-올려두는 것으로 확정했습니다(`OPENROUTER_API_KEY` 사용, `ANTHROPIC_API_KEY`는 미사용).
+올려두는 것으로 확정했습니다. Anthropic은 처음부터 안 쓰기로 확정해서 관련 코드
+(`_request_anthropic`, `LLM_PROVIDER` 분기 등)는 전부 제거했습니다.
 
 **분당 20건 제한 대응 — `llm_rate_limiter.py`**: 실제 OpenRouter HTTP 요청 직전에
 최소 3.5초 간격(`MIN_INTERVAL_SECONDS`)을 강제하는 전역 쓰로틀러. `issue_grouper.py`/
@@ -327,8 +327,6 @@ GitHub Actions Job 하나(최대 6시간, GitHub 인프라 자체의 캡)에 수
 | `NAVER_CLIENT_ID` | Secret | 네이버 뉴스 검색 API 인증 | `naver_collector.py` |
 | `NAVER_CLIENT_SECRET` | Secret | 위 ID와 짝을 이루는 비밀키 | `naver_collector.py` |
 | `KEYWORD_SHEET_CSV_URL` | Variable | 구글 시트(공개 게시 CSV)에서 검색 키워드를 읽어오는 URL | 없으면 각 collector의 하드코딩 fallback 키워드 사용 |
-| `ANTHROPIC_API_KEY` | Secret | Anthropic API 키(`LLM_PROVIDER=anthropic`일 때 사용) | 현재 운영에서는 미사용(아래 `LLM_PROVIDER` 참고) |
-| `LLM_PROVIDER` | Variable | `anthropic`(코드 기본값) 또는 `openrouter` | 현재는 `openrouter`로 설정해서 운영 중 |
 | `OPENROUTER_API_KEY` | Secret | OpenRouter API 키 | $10 선결제 크레딧이 연결된 계정 키(하루 요청 한도 1000건) |
 | `OPENROUTER_MODEL` | Variable | OpenRouter 1순위 모델명 | 비우면 자동 라우터(`openrouter/free`) |
 | `OPENROUTER_MODEL_2` | Variable | 1순위 실패 시 2순위 모델 | 선택 |

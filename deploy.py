@@ -7,6 +7,8 @@ from datetime import date
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+import category_aggregator
+
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
 
@@ -15,7 +17,7 @@ INTERNATIONAL_ACCENT = "#7c3aed"
 DOMESTIC_PILL_BG = "#e8f0fe"
 INTERNATIONAL_PILL_BG = "#f3ebfd"
 
-HEADER_BG = "#0f2f5c"
+HEADER_BG = f"linear-gradient(120deg, {DOMESTIC_ACCENT} 0%, {INTERNATIONAL_ACCENT} 100%)"
 
 
 def _escape(value) -> str:
@@ -97,21 +99,59 @@ def _format_section_html(title: str, items: list[dict], accent: str = DOMESTIC_A
     return header + body
 
 
-def _format_category_html(label: str, by_category: dict[str, list[dict]],
-                           accent: str = DOMESTIC_ACCENT, pill_bg: str = DOMESTIC_PILL_BG) -> str:
-    if not by_category:
-        return ""
-    blocks = []
-    for category, items in by_category.items():
-        blocks.append(
-            f'<div><span style="display:inline-block; padding:4px 14px; border-radius:14px; '
-            f'background:{pill_bg}; color:{accent}; font-size:15px; font-weight:bold; '
-            f'margin:14px 0 8px 0;">{_escape(category)}</span></div>'
-        )
-        blocks.append("".join(_format_issue_html(item, rank=i, accent=accent) for i, item in enumerate(items, start=1)))
-    header = (f'<h3 style="font-size:16px; color:#222; margin:24px 0 8px 0; padding-left:10px; '
-              f'border-left:4px solid {accent};">{_escape(label)}</h3>')
-    return header + "".join(blocks)
+def _format_category_row_pair(category: str, domestic_items: list[dict] | None,
+                               international_items: list[dict] | None) -> str:
+    """카테고리 하나를 국내/해외 나란히 한 행(<tr>)에 배치 - 같은 카테고리가 항상 같은 높이에 오게."""
+    def _pill(accent: str, bg: str) -> str:
+        return (f'<div><span style="display:inline-block; padding:4px 14px; border-radius:14px; '
+                f'background:{bg}; color:{accent}; font-size:15px; font-weight:bold; '
+                f'margin:0 0 8px 0;">{_escape(category)}</span></div>')
+
+    def _cell(items: list[dict] | None, accent: str) -> str:
+        if not items:
+            return '<p style="color:#999; font-size:13px; margin:4px 0;">(해당 카테고리 이슈 없음)</p>'
+        return "".join(_format_issue_html(item, rank=i, accent=accent) for i, item in enumerate(items, start=1))
+
+    left = _pill(DOMESTIC_ACCENT, DOMESTIC_PILL_BG) + _cell(domestic_items, DOMESTIC_ACCENT)
+    right = _pill(INTERNATIONAL_ACCENT, INTERNATIONAL_PILL_BG) + _cell(international_items, INTERNATIONAL_ACCENT)
+
+    return (
+        '<tr>'
+        f'<td width="50%" valign="top" style="padding:14px 14px 14px 0; border-bottom:1px solid #f0f0f0;">{left}</td>'
+        f'<td width="50%" valign="top" style="padding:14px 0 14px 14px; border-bottom:1px solid #f0f0f0;">{right}</td>'
+        '</tr>'
+    )
+
+
+def _format_category_section_aligned(domestic_by_category: dict[str, list[dict]],
+                                      international_by_category: dict[str, list[dict]],
+                                      category_order: list[str]) -> str:
+    """국내/해외 카테고리별 Top N을 category_order 순서로, 같은 카테고리끼리 같은 행에 배치."""
+    categories = [c for c in category_order if c in domestic_by_category or c in international_by_category]
+    extra = [c for c in list(domestic_by_category) + list(international_by_category) if c not in categories]
+    for c in dict.fromkeys(extra):
+        categories.append(c)
+
+    if not categories:
+        return '<p style="color:#999; font-size:13px;">(카테고리별 이슈 없음)</p>'
+
+    axis_labels = _two_column_table(
+        f'<h3 style="font-size:16px; color:#222; margin:0; padding-left:10px; '
+        f'border-left:4px solid {DOMESTIC_ACCENT};">국내</h3>',
+        f'<h3 style="font-size:16px; color:#222; margin:0; padding-left:10px; '
+        f'border-left:4px solid {INTERNATIONAL_ACCENT};">해외</h3>',
+    )
+    rows = "".join(
+        _format_category_row_pair(c, domestic_by_category.get(c), international_by_category.get(c))
+        for c in categories
+    )
+    table = (
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        'style="width:100%; border-collapse:collapse; table-layout:fixed;">'
+        + rows +
+        '</table>'
+    )
+    return axis_labels + table
 
 
 def _format_category_comparison_axis_html(axis_data: dict[str, dict] | None, accent: str) -> str:
@@ -184,7 +224,7 @@ def render_email_html(day_label: str, domestic_summarized: list[dict], internati
                        category_charts: dict[str, str] | None = None) -> str:
     """scored.json 데이터로 이메일 본문 HTML 생성."""
     header_html = f"""
-    <div style="background:{HEADER_BG}; padding:26px 32px; border-radius:10px 10px 0 0;">
+    <div style="background:{DOMESTIC_ACCENT}; background:{HEADER_BG}; padding:26px 32px; border-radius:10px 10px 0 0;">
       <p style="margin:0; font-size:11px; letter-spacing:2px; color:#9fc0ff; font-weight:bold;">NEWSLETTER</p>
       <h1 style="margin:6px 0 0 0; font-size:22px; color:#fff; font-weight:bold;">AI·IT 뉴스 큐레이션</h1>
       <p style="margin:5px 0 0 0; font-size:13px; color:#c9dcff;">{_escape(_humanize_day_label(day_label))}</p>
@@ -195,7 +235,7 @@ def render_email_html(day_label: str, domestic_summarized: list[dict], internati
 
     parts = [
         '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Arial, sans-serif; '
-        'background:#f2f4f7; padding:24px 0;">',
+        'background:#f2f4f7; padding:24px 0; word-break: keep-all; overflow-wrap: break-word;">',
         '<div style="max-width:1000px; margin:0 auto; background:#fff; border-radius:10px; '
         'overflow:hidden; border:1px solid #e5e5e5;">',
         header_html,
@@ -225,9 +265,8 @@ def render_email_html(day_label: str, domestic_summarized: list[dict], internati
     ))
 
     parts.append(section_header("카테고리별 Top N"))
-    parts.append(_two_column_table(
-        _format_category_html("국내", domestic_by_category, accent=DOMESTIC_ACCENT, pill_bg=DOMESTIC_PILL_BG),
-        _format_category_html("해외", international_by_category, accent=INTERNATIONAL_ACCENT, pill_bg=INTERNATIONAL_PILL_BG),
+    parts.append(_format_category_section_aligned(
+        domestic_by_category, international_by_category, category_aggregator._category_order()
     ))
 
     if failed_sources:

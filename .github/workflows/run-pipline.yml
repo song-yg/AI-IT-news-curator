@@ -218,13 +218,12 @@ jobs:
 
       - name: 정규화~배포 실행 (process_stage.py)
         env:
-          # --- 3차 LLM 그룹핑 보조 / 관련성 필터 / 요약 공통 (issue_grouper.py 등) ---
+          # --- 3차 LLM 그룹핑 보조 / 관련성 필터 / 요약 공통 (openrouter만 사용) ---
           # OPENROUTER_MODEL_2/3는 선택사항 - 1순위 모델이 실패했을 때 자동으로 시도되는
           # 2/3순위 폴백 모델(issue_grouper.py/relevance_filter.py/llm_summarizer.py 공통
           # 체인, 1순위->2순위->3순위->최종 안전망 순). 여기 env로 넘겨주지 않으면 리포
           # Variables에 값을 등록해도 파이썬 프로세스 입장에선 아예 안 보임(os.environ에
           # 없는 값 취급)에 주의.
-          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
           OPENROUTER_MODEL_2: ${{ vars.OPENROUTER_MODEL_2 }}
