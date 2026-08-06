@@ -1,6 +1,7 @@
 """
-relevance_filter.py - 관련성 필터. 키워드 매칭만으론 못 거르는 오매칭(동음이의어, 각주성
-언급 등)을 LLM으로 판단. issue_grouper.py와 동일한 프로바이더/재시도 패턴 재사용.
+relevance_filter.py - 관련성 필터.
+키워드 매칭만으론 못 거르는 오매칭(동음이의어, 각주성 언급 등)을 LLM으로 판단.
+issue_grouper.py와 동일한 프로바이더/재시도 패턴 재사용.
 기본값 방향은 issue_grouper와 반대 - 애매하면 true(통과)가 안전.
 """
 
@@ -231,9 +232,9 @@ def _call_llm(batch: list[dict], api_key: str, session: requests.Session) -> lis
 
 def filter_articles(articles: list[dict], deadline: float | None = None) -> list[dict]:
     """
-    기사 단위 관련성 필터. 지금은 파이프라인 본선에서 안 쓰임(legacy) - 그룹핑을 관련성
-    필터보다 먼저 실행하는 순서로 바뀌면서 filter_groups()(아래, 그룹 단위)를 씀. 그룹핑
-    없이 기사 단위로만 테스트하고 싶을 때 쓸 수 있어 남겨둠.
+    기사 단위 관련성 필터. 지금은 파이프라인 본선에서 안 쓰임(legacy)
+    그룹핑을 관련성 필터보다 먼저 실행하는 순서로 바뀌면서 filter_groups()(아래, 그룹 단위)를 씀.
+    그룹핑 없이 기사 단위로만 테스트하고 싶을 때 쓸 수 있어 남겨둠.
     """
     if not articles:
         return articles

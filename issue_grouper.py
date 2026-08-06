@@ -19,8 +19,8 @@ from keyword_tagger import EXCLUDED_TERMS
 
 
 # --- 1차: KR<->EN 키워드 사전 매칭 ---
-# keyword_tagger.CATEGORY_KEYWORDS(넓은 카테고리 분류)와 다르게, 여기는 "완전히 같은 사건"
-# 단위 매칭. 지금은 빈 리스트라 모든 기사가 2차(임베딩)로 넘어감 - 인프라만 남겨둠.
+# keyword_tagger.CATEGORY_KEYWORDS(넓은 카테고리 분류)와 다르게, 여기는 "완전히 같은 사건" 단위 매칭.
+# 지금은 빈 리스트라 모든 기사가 2차(임베딩)로 넘어감 - 인프라만 남겨둠.
 ISSUE_SYNONYM_GROUPS: list[set[str]] = []
 
 
@@ -438,10 +438,9 @@ def _merge_confirmed_components(components: list[list[dict]],
                                  confirmed_pairs: list[tuple[dict, dict, float]],
                                  extra_confirm=None) -> list[list[dict]]:
     """
-    confirmed_pairs로 components를 추가 병합. 단순 Union-Find는 "A-B, B-C 확정"만으로
-    A-C를 직접 확인 없이 한 그룹으로 묶는 연쇄(transitive chaining) 문제가 있어서, 각 연결
-    그룹이 완전그래프(클리크)인지 검증 - 클리크면 병합, 아니면(사슬만 연결) 빠진 쌍만
-    extra_confirm으로 재확인 후 재판정.
+    confirmed_pairs로 components를 추가 병합.
+    단순 Union-Find는 "A-B, B-C 확정"만으로 A-C를 직접 확인 없이 한 그룹으로 묶는 연쇄(transitive chaining) 문제가 있어서,
+    각 연결 그룹이 완전그래프(클리크)인지 검증 - 클리크면 병합, 아니면(사슬만 연결) 빠진 쌍만 extra_confirm으로 재확인 후 재판정.
     """
     if not confirmed_pairs:
         return components

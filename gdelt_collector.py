@@ -20,9 +20,8 @@ from gdeltdoc import GdeltDoc, Filters
 from gdeltdoc.errors import RateLimitError
 
 
-# gdeltdoc이 헤더 주입을 지원 안 해서 requests 기본 헤더를 오버라이드(User-Agent 없으면 429
-# 유발 이슈 확인됨). 프로세스 전역 부작용 - naver_collector의 요청에도 이 UA가 섞여 들어감
-# (인증은 별도 헤더 기반이라 영향 없음).
+# gdeltdoc이 헤더 주입을 지원 안 해서 requests 기본 헤더를 오버라이드(User-Agent 없으면 429 유발 이슈 확인됨).
+# 프로세스 전역 부작용 - naver_collector의 요청에도 이 UA가 섞여 들어감 (인증은 별도 헤더 기반이라 영향 없음).
 _GDELT_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
@@ -194,8 +193,7 @@ def _is_in_window(dt: datetime, window_start: datetime, window_end: datetime) ->
     return window_start <= dt < window_end
 
 
-# GH 러너 Job 하드 캡 360분 중 collect Job 자체 몫(350분)과 동일 - standalone 기본값,
-# 정상 실행은 호출부의 deadline이 우선.
+# GH 러너 Job 하드 캡 360분 중 collect Job 자체 몫(350분)과 동일 - standalone 기본값, 정상 실행은 호출부의 deadline이 우선.
 TIME_BUDGET_SECONDS = 5 * 60 * 60 + 50 * 60
 
 # 배치 크기 - 작을수록 크라우딩 적지만 요청 많아짐(잠정값).
@@ -447,9 +445,8 @@ def collect(keywords: list[str] | None = None, deadline: float | None = None,
     """
     GDELT에서 기사 메타데이터 수집(진입점).
 
-    적응형 배치 수집: 키워드를 BATCH_SIZE개씩 OR로 묶어 요청, 결과가 정확히 MAX_RECORDS에
-    도달하면 크라우딩으로 보고 그 배치 전체를 개별 재요청으로 보충. 배치 요청 자체가
-    실패하면(429 등) 같은 배치로 외부 재시도, 그래도 안 되면 최후 수단으로 개별 전환.
+    적응형 배치 수집: 키워드를 BATCH_SIZE개씩 OR로 묶어 요청, 결과가 정확히 MAX_RECORDS에 도달하면 크라우딩으로 보고 그 배치 전체를 개별 재요청으로 보충.
+    배치 요청 자체가 실패하면(429 등) 같은 배치로 외부 재시도, 그래도 안 되면 최후 수단으로 개별 전환.
 
     반환값: articles(공통 스키마 리스트), timeline(현재 항상 빈 dict).
     """

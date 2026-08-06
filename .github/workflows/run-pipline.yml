@@ -5,9 +5,9 @@
 #
 # AUTO_RUN_ENABLED(리포 Variables)를 off/0으로 하면 스케줄 실행만 스킵(수동 실행은 무관하게 항상 돎).
 #
-# Job 체이닝(collect + process 2-Job) - Job 하나가 GitHub Actions 하드 캡 6시간이라 GDELT
-# 수집(collect)과 정규화~배포(process)를 분리해서 각자 자기 몫의 6시간을 쓴다. collect
-# 실패해도 process는 그대로 돎(빈 기사로 "오늘은 0건"으로 안전하게 흘러감).
+# Job 체이닝(collect + process 2-Job)
+#  - Job 하나가 GitHub Actions 하드 캡 6시간이라 GDELT 수집(collect)과 정규화~배포(process)를 분리해서 각자 자기 몫의 6시간을 쓴다.
+# collect 실패해도 process는 그대로 돎(빈 기사로 "오늘은 0건"으로 안전하게 흘러감).
 
 name: AI-IT 큐레이션 파이프라인 실행
 
