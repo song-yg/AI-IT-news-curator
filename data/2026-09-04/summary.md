@@ -1,201 +1,211 @@
 # AI·IT 뉴스 큐레이션 - 2026-09-04
 
-생성 시각(UTC): 2026-09-04T01:12:07.694231+00:00
+생성 시각(UTC): 2026-09-04T21:37:26.300486+00:00
 
 
 ## 카테고리별 전일·7일 평균 대비 증감
 
 ### 국내
-- 기타 IT 기술: 698건 (전일 데이터 없음, 7일 평균 496.6건(+201.4))
-- 기타: 2247건 (전일 데이터 없음, 7일 평균 572.6건(+1674.4))
-- 반도체: 384건 (전일 데이터 없음, 7일 평균 775.4건(-391.4))
-- 기업 단위: 606건 (전일 데이터 없음, 7일 평균 312.0건(+294.0))
-- 인공지능: 2353건 (전일 데이터 없음, 7일 평균 1759.8건(+593.2))
-- 로봇공학: 360건 (전일 데이터 없음, 7일 평균 332.4건(+27.6))
+- 반도체: 412건 (전일 데이터 없음, 7일 평균 775.4건(-363.4))
+- 인공지능: 2210건 (전일 데이터 없음, 7일 평균 1759.8건(+450.2))
+- 로봇공학: 333건 (전일 데이터 없음, 7일 평균 332.4건(+0.6))
+- 기타 IT 기술: 335건 (전일 데이터 없음, 7일 평균 496.6건(-161.6))
+- 기타: 170건 (전일 데이터 없음, 7일 평균 572.6건(-402.6))
+- 기업 단위: 1254건 (전일 데이터 없음, 7일 평균 312.0건(+942.0))
 
 ### 해외
-- 기타: 395건 (전일 데이터 없음, 7일 평균 102.6건(+292.4))
-- 로봇공학: 0건 (전일 데이터 없음, 7일 평균 2.4건(-2.4))
-- 반도체: 7건 (전일 데이터 없음, 7일 평균 11.6건(-4.6))
-- 기업 단위: 58건 (전일 데이터 없음, 7일 평균 94.4건(-36.4))
-- 인공지능: 225건 (전일 데이터 없음, 7일 평균 290.8건(-65.8))
-- 기타 IT 기술: 7건 (전일 데이터 없음, 7일 평균 23.8건(-16.8))
+- 반도체: 14건 (전일 데이터 없음, 7일 평균 11.6건(+2.4))
+- 인공지능: 302건 (전일 데이터 없음, 7일 평균 290.8건(+11.2))
+- 로봇공학: 2건 (전일 데이터 없음, 7일 평균 2.4건(-0.4))
+- 기타 IT 기술: 13건 (전일 데이터 없음, 7일 평균 23.8건(-10.8))
+- 기타: 10건 (전일 데이터 없음, 7일 평균 102.6건(-92.6))
+- 기업 단위: 122건 (전일 데이터 없음, 7일 평균 94.4건(+27.6))
 ## 국내
 
-### 베슬AI·SK바이오팜 GPU 공급과 메타 뮤즈 스파크 1.3 공개, 증시 변동
-*원문: 마크 저커버그, "코딩과 에이전트 작업, 지금까지 우리가 만든 것 가운...*
-- 언급 1005건 (그룹 내 추가 2772건 생략)
-- 🔗 반대 축에서도 다뤄짐: Microsoft to disclose Azure revenue as part of segment changes
+### 美 증시, 금리 동결 기대에 상승...엔비디아·인텔리빅스 등 주요 기업 동반 호황
+*원문: 美 증시, 동반 상승...금리 공포 종료 통했다*
+- 언급 885건 (그룹 내 추가 2173건 생략)
+- 🔗 반대 축에서도 다뤄짐: Nvidia confirms $12 . 9B acquisition of AI hosting platform Hugging Face
 
-베슬AI가 SK바이오팜에 엔비디아 B200 GPU 128장을 공급한다고 밝혔으며, 메타는 토큰 사용량을 25% 줄인 뮤즈 스파크 1.3 버전을 공개했다. 동시에 샤오미는 IFA에서 Human×Car×Home을 내세워 차세대 SoC와 AI 모델을 선보였고, 국채금리 안정에 힘입어 뉴욕증시가 반등하는 한편 코스닥은 급락하고 코스피는 변동성을 보이며 강보합으로 마감했다.
+미국 증시는 연준 월러 이사의 금리 동결 발언에 힘입어 3대 지수가 동반 상승했으며, 엔비디아·메타·테슬라 등 기술주가 1%대 상승률을 보였다. 엔비디아는 IFA 2026에서 로컬 AI 생태계 확장을 발표하며 'RTX 스파크·페어'를 공개했고, 인텔리빅스는 코스닥 상장예비심사를 승인받아 13년 연속 흑자 기업으로 일반상장을 추진할 예정이다.
 
-원문 링크: https://www.aitimes.kr/news/articleView.html?idxno=41729, https://www.digitaltoday.co.kr/news/articleView.html?idxno=698034, https://www.womennews.co.kr/news/articleView.html?idxno=281748 외 2770건
+원문 링크: http://coinreaders.com/256596, https://www.munhwa.com/article/11614423?ref=naver, https://www.epnc.co.kr/news/articleView.html?idxno=406538 외 2171건
 
-### 티빙, 3954만 계정 유출 사고 사과 및 보상·보안 강화 발표
-*원문: 3954만 개 계정·기술자산 유출…최주희 티빙 대표 사과 "보안 체계 근본...*
-- 언급 208건 (그룹 내 추가 292건 생략)
+### 정부, 2027년 소방·AI·첨단장비 예산 대폭 확대
+*원문: K-소방 모토?... "사람 앞서 기술이 먼저 닿는다"*
+- 언급 70건 (그룹 내 추가 70건 생략)
 
-티빙은 해킹으로 3954만 개의 계정과 기술자산이 유출된 데 대해 공식 사과하고, 고객 보상 패키지와 안심보험을 통해 최대 300만원까지 보상하겠다고 밝혔다. 또한 보안 조직을 프로덕트·클라우드·전사 IT·컴플라이언스 보안 등으로 세분화하고 제로 트러스트 원칙을 적용하며, 향후 5년간 보안 인력을 현재 수준의 3배로 확충하고 투자액을 약 30억 원 규모로 늘릴 계획이라고 설명했다.
+정부는 2027년 소방청 예산을 올해보다 10.3% 증가한 3713억 원으로 편성하고, 무인소방로봇 9대와 4족보행로봇 40대 도입 등 첨단장비 및 AI·R&D 투자에 집중한다. 이와 함께 법무부·개인정보위·복지부·국가유산청 등 주요 부처 예산도 대폭 늘려 AI 기반 서비스와 사이버 위협 대응, 의료·복지 강화 등에 투자한다.
 
-원문 링크: https://www.e-science.co.kr/news/articleView.html?idxno=134717, https://www.edaily.co.kr/News/Read?newsId=04329606645576512&mediaCodeNo=257&utm_source=naver&utm_medium=referral&utm_campaign=news_syndication&utm_content=original_article, https://news.tf.co.kr/read/entertain/2361779.htm 외 290건
+원문 링크: https://www.public25.com/news/articleView.html?idxno=54103, https://www.news1.kr/society/court-prosecution/6279941, https://www.etoday.co.kr/news/view/2621913 외 68건
 
-### 네팔 대홍수로 실종 541명 집중 수색…한국 구호대 본격 투입
-*원문: 中, 티베트 피해지역 육상통로 확보‥실종 541명 집중 수색*
-- 언급 75건 (그룹 내 추가 134건 생략)
-
-네팔 대홍수로 사망 1,225명, 실종 541명이 발생했으며, 당국은 구조 인력 2,300여 명과 차량 400여 대, 장비 8,000여 대, 드론 800여 차례를 투입해 수색을 벌이고 있다. 한국 구호대(KDRT)는 inicialmente 구조대 거부를 겪었으나 결국 현장에 진입해 본격적인 수색에 나섰으며, 터널 내 에어 포켓으로 최대 17일 생존 가능하다는 분석이 나오고 있다.
-
-원문 링크: https://imnews.imbc.com/news/2026/world/article/6849307_36925.html, https://news.sbs.co.kr/news/endPage.do?news_id=N1008735944&plink=ORI&cooper=NAVER, https://www.fnnews.com/news/202609031051376917 외 132건
-
-### 한화에어로, K9 자주포에 드론 연계해 미래 포병 운용개념 제시
-*원문: 'K9 유저클럽' 개최…한화, 미래 자주포 운용개념 제시*
+### 서울우유, 4대 생성형 AI가 꼽은 '우유 브랜드 1위' 차지
 - 언급 63건 (그룹 내 추가 62건 생략)
 
-한화에어로스페이스는 K9 유저클럽에서 수직이착륙(VTOL) 방식의 화력유도 드론(Fire‑Guidance Drone)을 K9 자주포와 연계해 표적을 신속히 탐색하고 정밀 타격하는 미래 포병 운용개념을 공개했다. 또한 인공지능(AI)을 활용한 군수지원 구상과 디지털 기반의 TSP(TOMMS Sustainment Portal) 시스템을 함께 제시하며 K9 생태계 확장을 강조했다.
+AI 브랜드 분석 전문기업 에이아이빅스랩이 측정한 'AIBIX(AI 브랜드 경쟁력 지수)'에 따르면, 서울우유협동조합이 우유 부문에서 1위를 기록했다. 4대 주요 생성형 AI(챗GPT, 제미나이, 퍼플렉시티, 클로드)의 응답을 분석한 결과, 서울우유는 종합 57.6점을 획득해 2위와 6점 차이를 벌렸으며, 19개 우유 브랜드 가운데 가장 높은 브랜드 인지도를 보였다.
 
-원문 링크: https://www.nocutnews.co.kr/news/6572861?utm_source=naver&utm_medium=article&utm_campaign=20260903060144, https://www.newspim.com/news/view/20260903000264, https://www.ddaily.co.kr/page/view/2026090314500561427 외 60건
+원문 링크: https://www.maxmovie.com/news/articleView.html?idxno=501687, https://wemakenews.co.kr/news/view.php?no=26226, http://www.thefirstmedia.net/news/articleView.html?idxno=207748 외 60건
 
-### 9월 브랜드평판 빅데이터 분석, 시크릿데이·SBI저축은행·현대카드 등 각 부문 1위 수성
-*원문: [브랜드평판] 시크릿데이, 생리대 9월 1위···좋은느낌·라엘 상위권*
-- 언급 47건 (그룹 내 추가 62건 생략)
+### 경북 국제 AI·메타버스 영상제 개막…97개국 3403편 출품, '오아시스' 종합대상
+*원문: 경북도, 국제 AI 메타버스 영상제 개막…97개국 3,403편 출품*
+- 언급 49건 (그룹 내 추가 48건 생략)
 
-한국기업평담연구소가 2026년 8월 3일부터 9월 3일까지 수집한 빅데이터를 분석한 결과, 시크릿데이가 생리대 브랜드평판 1위(986,040점)를 수성했고, SBI저축은행 김문석 대표가 저축은행 CEO 브랜드평판 1위를 기록했다. 현대카드는 신용카드 브랜드평판 1위(336만 1884점)를 기록했으며, 임영웅과 방탄소년단 등 광고모델 부문도 각각 높은 순위를 보였다. 이번 조사는 각 부문별 수십만만 건에서 수천만 건 규모의 빅데이터를 기반으로 했다.
+경상북도가 구미에서 '2026 경북 국제 AI 메타버스 영상제(GAMFF)'를 개막했다. 97개국에서 3403편의 작품이 출품되며 역대 최대 규모를 기록했으며, 이상훈 감독의 '오아시스(Oasis)'가 종합대상을 수상했다. 또한 틱톡과의 협약을 통해 지역 크리에이터의 글로벌 진출을 지원하고, AI 동화 전시회 등 다양한 연계 행사도 진행된다.
 
-원문 링크: https://www.enetnews.co.kr/news/articleView.html?idxno=53990, https://www.energy-news.co.kr/news/articleView.html?idxno=227878, https://www.cbci.co.kr/news/articleView.html?idxno=603472 외 60건
+원문 링크: http://www.metroseoul.co.kr/article/20260904500266, https://www.straightnews.co.kr/news/articleView.html?idxno=310415, http://www.sisafocus.co.kr/news/articleView.html?idxno=364593 외 46건
+
+### 고양특례시, 고정밀 드론영상 자체 제작으로 행정 효율화
+*원문: 고양특례시, 고정밀 드론영상 자체 제작···신속한 행정 지원*
+- 언급 30건 (그룹 내 추가 29건 생략)
+
+고양특례시는 고정밀 드론영상을 직접 촬영·제작하는 체계를 구축해 농지조사 등 행정 업무에 신속하게 제공함으로써 행정 효율성을 높이고 있다. 이를 통해 수㎝급 고정밀 공간정보를 자체 구축하고, 인공지능과의 융합을 통해 산업 간 연계와 성장 속도를 높이는 전략을 추진하고 있다. 또한 항공·우주산업은 한국항공대학교와의 협력과 고양드론앵커센터, 킨텍스 일대 K-UAM 실증센터 등을 활용해 성장 기반을 마련하고 있다.
+
+원문 링크: https://www.kmaeil.com/news/articleView.html?idxno=650638, https://www.kmib.co.kr/article/view.asp?arcid=9000009058&cp=nv, https://www.thereport.co.kr/news/articleView.html?idxno=91096 외 27건
 
 ### 국내 - 카테고리별 Top N
 
 #### 인공지능
 
-### 천안 K-컬처박람회, 3대 산업전시관 호응 속 성황리 개막
-*원문: 천안 K-컬처박람회 막 올랐다…독립기념관서 한류 '문화 넘어 산업으로...*
-- 언급 45건 (그룹 내 추가 44건 생략)
+### 정부, 내년 소방·법무·개인정보 분야에 AI·로봇 투자 확대
+*원문: K-소방 모토?... "사람 앞서 기술이 먼저 닿는다"*
+- 언급 70건 (그룹 내 추가 70건 생략)
 
-천안 K-컬처박람회는 K-웹툰관에서 지역 작가 특별전과 AI 로봇팔 캐리커처를, K-POP 팝업 전시관에서 AI 가상 아이돌 데뷔 체험을 운영하며 관람객의 호응을 얻었다. K-푸드관에서는 전통 발효식품 소개와 코트라 연계 수출상담이 이루어졌고, 개막식에는 YB와 10cm가 출연하는 K-Rock 공연도 진행되었다. 박람회는 오는 6일까지 이어진다.
+정부는 내년 소방청 예산을 3713억원으로 책정하고 무인소방로봇 9대와 4족보행로봇 40대 도입 등 첨단장비 확충에 투자한다. 또한 법무부 예산은 5조원을 넘어 전년보다 7010억원 늘어나 AI 빅데이터 분석 및 계호 시스템 등에 자금을 배정하고, 개인정보위원회 예산은 996억원으로 예방체계 투자를 137% 확대한다.
 
-원문 링크: https://www.aflnews.co.kr/news/articleView.html?idxno=327463, https://daily.hankooki.com/news/articleView.html?idxno=1402493, https://www.aflnews.co.kr/news/articleView.html?idxno=327465 외 42건
+원문 링크: https://www.public25.com/news/articleView.html?idxno=54103, https://www.news1.kr/society/court-prosecution/6279941, https://www.etoday.co.kr/news/view/2621913 외 68건
 
 #### 기타 IT 기술
 
-### 네팔 대홍수로 실종 541명 집중 수색…중국, 티베트 피해지역 육상통로 확보
-*원문: 中, 티베트 피해지역 육상통로 확보‥실종 541명 집중 수색*
-- 언급 75건 (그룹 내 추가 134건 생략)
+### 티빙, 3954만 개 이용자 계정 개인정보 유출…보상안 발표에도 재발 방지·보안 강화 약속
+*원문: [TOP이슈] 티빙, 3954만 개인정보 유출→뒤늦은 보상안 발표 역효과 "손...*
+- 언급 29건 (그룹 내 추가 28건 생략)
 
-네팔 대홍수로 티베트 피해지역에서 실종 541명에 대한 집중 수색이 진행 중이며, 중국은 해당 지역의 육상통로를 확보해 중장비를 투입했다. 구조 당국은 인력 2천300여 명과 차량 400여 대, 수색·구조 장비 8천여 대, 드론 800여 차례를 투입했으며, 한국 구호대도 본격적인 수색 작업에 나섰다. 또한 터널 내에 물과 식량이 있는 '에어 포켓'이 형성되어 최대 17일 생존이 가능하다는 분석이 제기됐다.
+티빙은 약 3천954만 개 이용자 계정의 개인정보가 유출되는 사이버 침해 사고를 확인하고 대국민 사과 및 재발 방지책을 발표했다. 보안 투자를 5년 대비 약 4배 늘리고, 보안 전문인력을 3배 늘리며 제로 트러스트 보안 방식을 도입하는 등 전사적 보안 체계를 재확립한다. 피해 이용자에게는 해킹·피싱 등 사이버 금융사기로 인한 손실을 1인당 최대 300만 원까지 보상하는 안도 마련했다.
 
-원문 링크: https://imnews.imbc.com/news/2026/world/article/6849307_36925.html, https://news.sbs.co.kr/news/endPage.do?news_id=N1008735944&plink=ORI&cooper=NAVER, https://www.fnnews.com/news/202609031051376917 외 132건
+원문 링크: https://www.topstarnews.net/news/articleView.html?idxno=16183352, https://www.kmib.co.kr/article/view.asp?arcid=9000008951&cp=nv, https://www.mdtoday.co.kr/news/articleView.html?idxno=610863 외 26건
+
+#### 기업 단위
+
+### 美 증시, 금리 동결 기대에 상승...엔비디아·인텔리빅스 등 주요 종목 강세
+*원문: 美 증시, 동반 상승...금리 공포 종료 통했다*
+- 언급 885건 (그룹 내 추가 2173건 생략)
+- 🔗 반대 축에서도 다뤄짐: Nvidia confirms $12 . 9B acquisition of AI hosting platform Hugging Face
+
+미국 증시는 연준 월러 이사의 금리 동결 발언에 힘입어 3대 지수가 동반 상승했으며, 엔비디아와 인텔리빅스 등 AI 관련 주요 종목이 강세를 보였다. 엔비디아는 IFA 2026에서 로컬 AI 생태계를 확장하기 위한 'RTX 스파크·페어'를 공개하며 기술적 지지를 받았고, 인텔리빅스는 코스닥 상장예비심사를 승인받아 13년 연속 흑자 실적을 바탕으로 한국 시장 진출을 가속화하고 있다.
+
+원문 링크: http://coinreaders.com/256596, https://www.munhwa.com/article/11614423?ref=naver, https://www.epnc.co.kr/news/articleView.html?idxno=406538 외 2171건
+
+#### 반도체
+
+### 김제시, 2027년 국가예산 주요사업 정부안 다수 반영
+- 언급 24건 (그룹 내 추가 23건 생략)
+
+{"title": "김제·원주 등 전국 시단, 2027년 국가예산안 주요사업 대거 반영", "summary": 2027년 국무회의에서 의결된 821조 원 규모 국가예산안에 김제시가 6,606억 원(신규 76억 원·계속 6,530억 원)이 반영되었으며, 원주시도 첨단산업·교통망 등 2,862억 원이 반영되는 등 지자체별 미래 성장 동력 확보가 이어지고 있다. 김제시에는 AI·로봇·이차전지 등 첨단산업 지원과 농업 AI 로봇 표준화 사업 등이, 원주시에는 반도체·AI·친환경 헬스케어 등 첨단 산업 육성 사업이 각각 포함되었다."}
+
+원문 링크: https://www.thepowernews.co.kr/view.php?ud=2026090417072640543dfcd109a8_7, https://www.news1.kr/local/jeonbuk/6280324, https://www.gukjenews.com/news/articleView.html?idxno=3685198 외 21건
 
 #### 로봇공학
 
-### 한화에어로, K9 자주포에 드론·AI 연계한 미래 포병 운용개념 제시
-*원문: 'K9 유저클럽' 개최…한화, 미래 자주포 운용개념 제시*
-- 언급 63건 (그룹 내 추가 62건 생략)
+### 고양특례시, 고정밀 드론영상 자체 제작으로 스마트 행정 추진
+*원문: 고양특례시, 고정밀 드론영상 자체 제작···신속한 행정 지원*
+- 언급 30건 (그룹 내 추가 29건 생략)
 
-한화에어로스페이스는 K9 자주포에 수직이착륙(VTOL) 방식의 화력유도 드론을 연계해 이동하는 표적을 빠르게 탐지하고 K9이 정밀타격하는 미래 자주포 운용개념을 제시했다. 또한 AI 기반 군수지원과 디지털 플랫폼(TSP)을 통해 부품 관리 및 지원 체계를 효율화하는 방안도 공개했다.
+고양특례시는 고정밀 드론영상을 직접 촬영·제작하는 원스톱 체계를 구축해 농지조사 등 행정 업무에 활용하고, 3㎝급 고정밀 공간정보를 자체 구축해 행정 효율성을 높이고 있다. 또한 인공지능과 결합해 산업 간 연계를 강화하며, 한국항공대학교와의 협력과 고양드론앵커센터, 킨텍스 일대 K-UAM 실증센터를 활용해 항공·우주 산업을 성장 동력으로 육성할 계획이다.
 
-원문 링크: https://www.nocutnews.co.kr/news/6572861?utm_source=naver&utm_medium=article&utm_campaign=20260903060144, https://www.newspim.com/news/view/20260903000264, https://www.ddaily.co.kr/page/view/2026090314500561427 외 60건
-
-#### 반도체
-
-### 반도체 검사장비 1위 ㈜티에스이, 대구에 300억 투자해 R&D 거점·디자인센터 설립
-*원문: 반도체 검사장비 1위 티에스이, 대구에 R&D 거점 세운다*
-- 언급 21건 (그룹 내 추가 20건 생략)
-
-반도체 검사장비 국내 1위 기업 ㈜티에스이가 대구시와 협력해 반도체 검사 디자인센터를 설립한다. 2030년까지 총 300억 원을 투입해 R&D 인력 150명을 신규 채용하며, 대구테크노파크에 위치한 이번 투자는 지역 대학과의 협력을 통해 반도체 인재 양성과 지역 청년 정주 여건 마련을 도모한다.
-
-원문 링크: https://www.mk.co.kr/article/12143375, https://www.eroun.net/news/articleView.html?idxno=89179, https://www.mk.co.kr/article/12143604 외 18건
-
-#### 기업 단위
-
-### 티빙, 3954만 계정·기술자산 유출…보안 투자 4배 확대 및 고객 보상 발표
-*원문: 3954만 개 계정·기술자산 유출…최주희 티빙 대표 사과 "보안 체계 근본...*
-- 언급 208건 (그룹 내 추가 292건 생략)
-
-티빙은 개발자 키 하나로 운영망에 침입해 평문으로 저장된 접속키가 노출되면서 3954만 개의 계정과 기술자산이 유출된 사실을 공식 사과했다. 이에 따라 보안 조직을 프로덕트·클라우드·전사 IT·컴플라이언스 보안 등으로 세분화하고 제로 트러스트 원칙을 적용하며, 향후 5년간 전문 인력을 현재 수준의 3배로 확대하고 보안 투자액을 약 30억 원까지 늘릴 계획이라고 밝혔다. 또한 고객에게 포인트 보상과 안심보험을 제공하며 피싱 피해 시 최대 300만 원을 보상하고, 인당 perceived value 2만 원의 보상 체감 가치를 제시했다.
-
-원문 링크: https://www.e-science.co.kr/news/articleView.html?idxno=134717, https://www.edaily.co.kr/News/Read?newsId=04329606645576512&mediaCodeNo=257&utm_source=naver&utm_medium=referral&utm_campaign=news_syndication&utm_content=original_article, https://news.tf.co.kr/read/entertain/2361779.htm 외 290건
+원문 링크: https://www.kmaeil.com/news/articleView.html?idxno=650638, https://www.kmib.co.kr/article/view.asp?arcid=9000009058&cp=nv, https://www.thereport.co.kr/news/articleView.html?idxno=91096 외 27건
 
 ## 해외
 
-### 마이크로소프트, Azure 클라우드 매출을 분기적으로 공개
-*원문: Microsoft to disclose Azure revenue as part of segment changes*
-- 언급 64건 (그룹 내 추가 63건 생략)
-- 🔗 반대 축에서도 다뤄짐: 마크 저커버그, "코딩과 에이전트 작업, 지금까지 우리가 만든 것 가운...
+### Nvidia, AI 호스팅 플랫폼 Hugging Face 인수 거래(약 129억 달러) 확정
+*원문: Nvidia confirms $12 . 9B acquisition of AI hosting platform Hugging Face*
+- 언급 149건 (그룹 내 추가 149건 생략)
+- 🔗 반대 축에서도 다뤄짐: 美 증시, 동반 상승...금리 공포 종료 통했다
 
-마이크로소프트는 재무 보고 방식을 변경하여 Azure 클라우드 부문의 매출을 분기적으로 처음으로 공개한다. 이는 기업의 투명성을 높이고 투자자들이 클라우드 사업 실적을 쉽게 파악할 수 있도록 한다. 앞으로도 정기적인 Azure 매출 공개를 통해 경쟁사인 Amazon과 Google과의 비교가 가능해질 전망이다.
+Nvidia는 AI 호스팅 플랫폼 Hugging Face를 약 129억 달러에 인수했다고 확인했다. 이번 인수는 Nvidia가 AI 스택 전반에 대한 통제력을 강화하는 움직임으로, Hugging Face를 통해 모델 호스팅과 개발 생태계를 더욱 넓게 장악하려는 전략이다. Nvidia는 인수 후에도 Hugging Face가 독립적으로 운영되며 과도한 수익 압박을 가하지 않을 것이라는 약속을 전했다.
 
-원문 링크: https://www.cnbc.com/2026/09/02/microsoft-to-disclose-azure-revenue-as-part-of-segment-changes.html, https://www.theverge.com/news/989102/microsoft-earnings-changes-azure-revenue, https://www.thestar.com.my/tech/tech-news/2026/09/03/microsoft-reveals-azure-cloud-sales-in-financial-reporting-shift 외 61건
+원문 링크: https://siliconangle.com/2026/09/03/nvidia-confirms-12-9b-acquisition-of-ai-hosting-platform-hugging-face/, https://observer.com/2026/09/nvidia-hugging-face-acquisition-open-ai/, https://www.proactiveinvestors.com.au/companies/news/1098082/tech-bytes-nvidia-s-us-13-billion-hugging-face-deal-tightens-grip-on-ai-stack-1098082.html 외 147건
 
-### 보르디게라: 모네가 완벽하다고 부른 이탈리아의 비밀 리비에라 마을
-*원문: Bordighera : Italys secret Riviera town Monet called perfect | The Standard*
-- 언급 49건 (그룹 내 추가 48건 생략)
+### AI 반려동물·컴패니언 사용 증가, 사회적 고립 심화 우려 - 일론 머스크 연구소 발표
+*원문: Social isolation to rise via use of AI companions , Elon research centers find*
+- 언급 12건 (그룹 내 추가 11건 생략)
 
-보르디게라는 이탈리아 리비에라에 위치한 작은 마을로, 화가 클로드 모네가 '완벽하다'고 표현한 곳으로 알려져 있다. 비교적 알려지지 않은 관광지로, 해안 경관과 전통적인 분위기를 자랑한다. 여러 지역 언론에서 동일한 제목으로 보도되며, 그 매력을 다시금 조명하고 있다.
+일론 머스크 연구소가 발표한 보고서에 따르면, AI 컴패니언(인공지능 반려동물)의 사용이 늘어나면서 사회적 고립 현상이 심화될 것이라는 우려가 제기되고 있습니다. 이 보고서는 AI 기술의 발전로 인해 사람들이 실제 인간 관계 대신 인공지능과의 교류에 의존하게 될 경우, 지속적인 사회적 고립과 그에 따른 정신건강 문제가 악화될 수 있음을 경고하고 있습니다.
 
-원문 링크: https://www.standard.net.au/story/9338621/bordighera-italys-secret-riviera-town-monet-called-perfect/, https://www.examiner.com.au/story/9338621/bordighera-italys-secret-riviera-town-monet-called-perfect/, https://www.illawarramercury.com.au/story/9338621/bordighera-italys-secret-riviera-town-monet-called-perfect/ 외 46건
+원문 링크: https://www.insidenova.com/news/national/social-isolation-to-rise-via-use-of-ai-companions-elon-research-centers-find/article_18b801c6-fe1f-576f-9688-4d250cc47894.html, https://www.omakchronicle.com/news/national/social-isolation-to-rise-via-use-of-ai-companions-elon-research-centers-find/article_fa4b737c-325c-5947-9be3-0504bbc4d428.html, https://www.wyomingnewsnow.tv/news/national/social-isolation-to-rise-via-use-of-ai-companions-elon-research-centers-find/article_947af882-f4ec-59d6-96e3-41da115c93d5.html 외 9건
 
-### 불량 개발자가 자랑했다가 - premier(총리)는 그의 가장 친한 친구였다
-*원문: Rogue developer boasted then - premier was  best friend  *
-- 언급 27건 (그룹 내 추가 26건 생략)
-
-불량 개발자가 무언가를 자랑했다. 그 후 premier(총리)가 그의 가장 친한 친구임이 밝혀졌다.
-
-원문 링크: https://www.standard.net.au/story/9343289/rogue-developer-boasted-then-premier-was-best-friend/, https://www.theadvocate.com.au/story/9343289/rogue-developer-boasted-then-premier-was-best-friend/, https://www.bunburymail.com.au/story/9343289/rogue-developer-boasted-then-premier-was-best-friend/ 외 24건
-
-### 월스트리트, 3일간의 하락 흐름 이어 급등세 전환…아시아 주식도 상승세
-*원문: Wall Street : Μερική ανάκαμψη μετά το τριήμερο πτωτικό σερί*
-- 언급 11건 (그룹 내 추가 10건 생략)
-
-3일간의 연속 하락세를 멈춘 월스트리트 증시가 기술주 상승과 안정적인 유가·채권 금리를 배경으로 반등했다. 이에 따라 아시아 주식시장도 상승세를 보이며 월스트리트의 흐름을 따라갔다. 유가는 소폭 하락했으나 전반적인 시장 분위기는 회복세를 보였다.
-
-원문 링크: https://www.tanea.gr/2026/09/03/economy/diethni/wall-street-meriki-anakampsi-meta-to-triimero-ptotiko-seri/, https://www.inewsgr.com/27/Wall-Street-meriki-anakampsi-meta-to-triimero-ptotiko-seri.htm, https://www.newindianexpress.com/business/2026/Sep/03/oil-prices-edge-lower-while-asian-shares-rise-tracking-wall-street-gains-2 외 8건
-
-### 프랑스 정부와 코트디부아르 정부, Mistral과의 파트너십 강화로 여러 부처에 AI 배포 추진
-*원문: Côte dIvoire : Le gouvernement renforce son partenariat avec Mistral pour accélérer lessor de lintelligence artificielle*
+### 뉴욕시·로스앤젤레스, 초중생 대상 AI 사용 금지 조치 발표
+*원문: İlköğretim Çağındaki Çocuklara Yapay Zeka Yasağı : İşte Detaylar*
 - 언급 10건 (그룹 내 추가 9건 생략)
 
-프랑스 정부는 Mistral과의 협력을 강화하여 여러 부처에 인공지능을 도입하고, 사기 및 사이버 보안 분야에서의 활용을 확대하고 있다. 코트디부아르 정부 역시 Mistral과의 파트너십을 심화해 AI 발전을 가속화하고 있다. 이러한 노력은 정부 차원에서 AI 기술을 공공 서비스에 적용하려는 의지를 보여준다.
+뉴욕시는 초·중학생(8학년까지)의 인공지능 챗봇 사용을 1년간 금지한다고 발표했다. 동시에 로스앤젤레스 교육구도 모든 학생을 대상으로 생성형 AI 도구 접근을 차단했다. 이들 조치는 교실에서의 인간 상호작용을 강화하고 AI 남용을 우려해 시행된 것이다.
 
-원문 링크: https://burkina24.com/2026/09/02/cote-divoire-le-gouvernement-renforce-son-partenariat-avec-mistral-pour-accelerer-lessor-de-lintelligence-artificielle/, https://www.sudouest.fr/economie/cybersecurite/cyberattaques-l-etat-renforce-son-partenariat-avec-mistral-pour-deployer-l-intelligence-artificielle-dans-plusieurs-ministeres-30462347.php, https://www.sudouest.fr:443/economie/cybersecurite/cyberattaques-l-etat-renforce-son-partenariat-avec-mistral-pour-deployer-l-intelligence-artificielle-dans-plusieurs-ministeres-30462347.php 외 7건
+원문 링크: https://shiftdelete.net/nyc-egitimde-yapay-zeka-yasagi, https://www.diariouno.com.ar/sociedad/nueva-york-frena-la-inteligencia-artificial-las-aulas-y-cambia-las-reglas-miles-estudiantes-n1592529, https://www.teknolojioku.com/egitim/new-york-city-8-sinifa-kadar-ogrencilerin-yapay-zeka-kullanimini-yasakladi-6a993e3d217b7e3be509f9f3 외 7건
+
+### 조달 심사, AI 플랫폼 데이터 삭제 방식 묻는다; FastGPT가 보관 기간과 삭제 의미론 공개
+*원문: Procurement Reviews Now Ask How AI Platform Data Is Deleted ; FastGPT Publishes Retention Periods and Deletion Semantics*
+- 언급 7건 (그룹 내 추가 6건 생략)
+
+AI 플랫폼의 데이터 삭제 및 보관 방식에 대해 조달 심사 단계에서 점점 더 많은 질문이 제기되고 있다. 이에 대응해 FastGPT가 데이터 보관 기간과 삭제 의미론(Deletion Semantics)을 공개하며 투명성을 강조하고 있다. 이는 기업이 AI 도구를 도입할 때 데이터 거버넌스 측면에서 새로운 관심을 불러일으기로 예상된다.
+
+원문 링크: https://montrealgazette.com/press-releases/pr-newswire/procurement-reviews-now-ask-how-ai-platform-data-is-deleted-fastgpt-publishes-retention-periods-and-deletion-semantics/, https://thestarphoenix.com/press-releases/pr-newswire/procurement-reviews-now-ask-how-ai-platform-data-is-deleted-fastgpt-publishes-retention-periods-and-deletion-semantics/, https://www.thewhig.com/press-releases/pr-newswire/procurement-reviews-now-ask-how-ai-platform-data-is-deleted-fastgpt-publishes-retention-periods-and-deletion-semantics/ 외 4건
+
+### 앤스로픽, IPO 도입부서 $150억 담보대출 마무리·투자자 주목사항 정리
+*원문: The Anthropic IPO May Be Right Around the Corner . Here What Investors Need to Know . *
+- 언급 7건 (그룹 내 추가 6건 생략)
+
+앤스로픽이 IPO 진행을 앞두고 $150억 규모의 사전 담보대출을 마무리하는 등 자금 조달을 강화하고 있다. 기업은 Labor Day 이후 IPO 사업서를 공개할 계획이며, 투자자들은 높은 성장 잠재력과 동시에 따반인 위험 요인을 주의 깊게 살펴볼 필요가 있다. 앞서 앤스로픽은 IPO 전 $130억 달러 규모의 투자 유치를 완료한 바 있다.
+
+원문 링크: https://www.aol.com/articles/anthropic-ipo-may-around-corner-003001000.html, https://www.morningstar.com/stocks/anthropics-ipo-will-be-hugeand-risky-here-are-challenges-investors-should-watch, https://www.aol.com/articles/anthropic-reportedly-planning-unveil-ipo-151235000.html 외 4건
 
 ### 해외 - 카테고리별 Top N
 
-#### 반도체
+#### 인공지능
 
-### 젠슨 황(Jensen Huang), 35억 달러 MediaTek 거래가 순환적이지 않다고 밝히다… 10년 로드맵이 진짜 신호
-*원문: Jensen Huang Says the $3 . 5 Billion MediaTek Deal Is Not Circular . The Decade Long Roadmap Is the Real Tell . *
-- 언급 2건 (그룹 내 추가 1건 생략)
+### Nvidia가 AI 호스팅 플랫폼 Hugging Face를 129억 달러에 인수
+*원문: Nvidia confirms $12 . 9B acquisition of AI hosting platform Hugging Face*
+- 언급 149건 (그룹 내 추가 149건 생략)
+- 🔗 반대 축에서도 다뤄짐: 美 증시, 동반 상승...금리 공포 종료 통했다
 
-젠슨 황은 MediaTek과의 35억 달러 거래가 순환적 구조가 아니라고 강조하며, 진짜 신호는 10년 로드맵이라고 밝혔다. 그는 장기 로드맵이 이번 파트너십의 진정한 전략적 의도를 보여준다고 덧붙였다.
+Nvidia가 인공지능 모델 호스팅 및 공유 플랫폼인 Hugging Face를 약 129억 달러(약 130억 달러)에 인수했다. 이번 인수를 통해 Nvidia는 AI 개발 생태계의 핵심 인프라에 대한 통제력을 강화하고, Hugging Face의 독립성과 개방성을 유지하겠다는 약속을 전했다. 거래 규모는 약 129억~130억 달러로 보고되며, 이는 최근 AI 분야에서 큰 규모의 인수 거래 중 하나이다.
 
-원문 링크: https://247wallst.com/investing/2026/09/02/jensen-huang-says-the-3-5-billion-mediatek-deal-is-not-circular-the-decade-long-roadmap-is-the-real-tell/, https://www.aol.com/articles/jensen-huang-says-3-5-192050000.html
+원문 링크: https://siliconangle.com/2026/09/03/nvidia-confirms-12-9b-acquisition-of-ai-hosting-platform-hugging-face/, https://observer.com/2026/09/nvidia-hugging-face-acquisition-open-ai/, https://www.proactiveinvestors.com.au/companies/news/1098082/tech-bytes-nvidia-s-us-13-billion-hugging-face-deal-tightens-grip-on-ai-stack-1098082.html 외 147건
 
 #### 기업 단위
 
-### 개발자 이해관계가 자유당 진영과 겹친다
-*원문: Developer interests overlapped with Liberal faction *
-- 언급 9건 (그룹 내 추가 8건 생략)
+### 앤스로픽, IPO 전 $150억 달러 규모 크레딧 시설 마무령…투자자 주목할 과제는
+*원문: The Anthropic IPO May Be Right Around the Corner . Here What Investors Need to Know . *
+- 언급 7건 (그룹 내 추가 6건 생략)
 
-개발자 이해관계가 자유당(Liberal faction) 진영과 겹친다는 분석이 제기되었다. 이는 정치적 지지와 산업 이해관계의 교차로를 의미하는 것으로, 관련 기사들이 동일한 취지의 내용을 보도하고 있다.
+앤스로픽이 IPO를 앞두고 150억 달러 규모의 선IPO 크레딧 시설을 마무리하는 등 자금 조달에 돉진하고 있다. 이어 9월 초 노동절 이후 IPO 사전제안서를 공개할 가능성도 보고 있어, 투자자들은 성장 잠재력과 리스크 요인을 함께 살펴볼 필요가 있다. 기업가치 평가와 시장 상황 등에 따라 큰 수익과 높은 위험을 동반할 수 있다는 전망도 제기되고 있다.
 
-원문 링크: https://www.standard.net.au/story/9343289/developers-interests-overlapped-with-liberal-factions/, https://www.bendigoadvertiser.com.au/story/9343289/developers-interests-overlapped-with-liberal-factions/, https://www.muswellbrookchronicle.com.au/story/9343289/developers-interests-overlapped-with-liberal-factions/ 외 6건
+원문 링크: https://www.aol.com/articles/anthropic-ipo-may-around-corner-003001000.html, https://www.morningstar.com/stocks/anthropics-ipo-will-be-hugeand-risky-here-are-challenges-investors-should-watch, https://www.aol.com/articles/anthropic-reportedly-planning-unveil-ipo-151235000.html 외 4건
 
-#### 인공지능
+#### 반도체
 
-### 월스트리트(Wall Street), 3일 연속 하락 후 반등… 아시아 증시 상승, 유가 소폭 하락
-*원문: Wall Street : Μερική ανάκαμψη μετά το τριήμερο πτωτικό σερί*
-- 언급 11건 (그룹 내 추가 10건 생략)
+### 의견 : TSMC는 현재 '마이닉센(대형 7강)' 주식보다 더 좋은 매수 대상
+*원문: Opinion : TSMC Is a Better Buy Than Any of the  Magnificent Seven  Stocks Right Now*
+- 언급 3건 (그룹 내 추가 2건 생략)
 
-월스트리트가 3일 연속 하락 후 반등세를 보였으며, 기술주가 상승하고 유가와 채권 수익률은 비교적 안정적이었다. 이에 따라 유가는 소폭 하락했으나 아시아 증시는 월스트리트의 상승을 따라 상승했다.
+한 분석가 의견에 따르면, TSMC는 현재 '마이닉센(Magnificent Seven)' 주식군보다 더 매력적인 투자 대상이라고 본다. 반도체 리더십과 수익성을 강조하며, 대형 기술주들보다 상대적으로 저평가된 측면을 지적한다.
 
-원문 링크: https://www.tanea.gr/2026/09/03/economy/diethni/wall-street-meriki-anakampsi-meta-to-triimero-ptotiko-seri/, https://www.inewsgr.com/27/Wall-Street-meriki-anakampsi-meta-to-triimero-ptotiko-seri.htm, https://www.newindianexpress.com/business/2026/Sep/03/oil-prices-edge-lower-while-asian-shares-rise-tracking-wall-street-gains-2 외 8건
+원문 링크: https://www.aol.com/articles/opinion-tsmc-better-buy-magnificent-032000000.html, https://www.fool.com/investing/2026/09/03/opinion-tsmc-is-a-better-buy-than-any-of-the-mag/?source=iedfolrf0000001, https://www.fool.com/investing/2026/09/03/opinion-tsmc-is-a-better-buy-than-any-of-the-mag/
+
+#### 로봇공학
+
+### 휴머노이드 종류를 위한 하나의 거대한 도약
+*원문: One giant leap for humanoid kind*
+- 언급 2건 (그룹 내 추가 1건 생략)
+
+기사는 휴머노이드 로봇의 최근 성과를 'One giant leap for humanoid kind'이라는 표현으로 묘사한다. 이는 휴머노이드 기술이 중요한 발전을 이루었음을 암시한다.
+
+원문 링크: http://europe.chinadaily.com.cn/a/202609/04/WS6a99ff04e4b06d4aa055c44d.html, http://usa.chinadaily.com.cn/a/202609/04/WS6a99ff04e4b06d4aa055c44d.html
 
 #### 기타 IT 기술
 
-### Adobe, Slack에 Photoshop·Firefly·70종의 크리에이티브 툴 제공
-*원문: Adobe brings Photoshop , Firefly , and 70+ creative tools to Slack with MCP app*
-- 언급 3건 (그룹 내 추가 2건 생략)
+### 주니어 및 시니어 풀스택 개발자 채용 공고
+*원문: Junior Full Stack Developer - IT - Online*
+- 언급 2건 (그룹 내 추가 1건 생략)
 
-Adobe가 MCP 앱을 통해 Slack에 Photoshop, Firefly 및 70종 이상의 크리에이티브 툴을 도입했다. 이를 통해 사용자는 Slack 내에서 직접 Adobe의 주요 디자인 및 생성 AI 도구들을 활용할 수 있게 되며, 업무 협업 환경에서의 생산성이 높아질 것으로 기대된다.
+해당 이슈는 주니어 풀스택 개발자 직책(IT·온라인)과 시니어 풀스택 개발자 직책(Gauteng Johannesburg) 채용 공고를 다루고 있다. 두 공고는 각각 경력 수준과 근무 지역을 명시하며, 풀스택 개발자 인력 수요를 보여준다.
 
-원문 링크: https://9to5mac.com/2026/09/02/adobe-brings-photoshop-firefly-and-70-creative-tools-to-slack-with-mcp-app/, https://iphonesoft.fr:443/2026/09/02/70-outils-adobe-debarquent-slack-photoshop, https://itbrief.co.nz/story/adobe-brings-70-tools-into-slack-for-workplace-use
+원문 링크: https://it-online.co.za/2026/09/02/junior-full-stack-developer-8/, https://it-online.co.za/2026/09/02/senior-full-stack-developer-gauteng-johannesburg-8/
