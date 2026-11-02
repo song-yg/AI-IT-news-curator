@@ -1,0 +1,20 @@
+# GDELT GKG 원본 파일 대체 경로 진단용 - 파이프라인/데이터와 무관.
+name: GDELT GKG 파일 테스트
+
+on:
+  push:
+    branches: [fix/gdelt-empty-response]
+    paths: [gkg_probe.py, .github/workflows/gkg-probe.yml]
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q requests
+      - run: python -u gkg_probe.py
