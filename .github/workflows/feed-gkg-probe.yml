@@ -1,0 +1,38 @@
+# feed-livestock-news-curator용 GKG 7일치 제목 매칭 테스트 - 수집 결과 출력만(메일/저장/커밋 없음).
+name: 축산 GKG 7일 테스트
+
+on:
+  push:
+    branches: [test/feed-gkg-probe]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q requests
+      - run: |
+          python -u - <<'PY'
+          from datetime import datetime, timedelta, timezone
+          from collections import Counter
+          import gkg_collector
+          # feed 저장소 KEYWORDS_EN + 최근 결과의 matched_keywords(영문) + state 파일 키워드
+          kws = ["foot-and-mouth disease", "feed price", "livestock movement restriction", "swine industry",
+                 "feed mill", "feed additive", "livestock import tariff", "poultry vertical integration",
+                 "smart farming", "smart livestock barn",
+                 "FMD", "ASF", "PED", "TMR", "bird flu", "avian flu", "avian influenza", "grain elevator",
+                 "biosecurity", "dairy cattle", "laying hens", "wheat", "corn", "grain price",
+                 "Newcastle disease", "antimicrobial resistance", "quarantine", "poultry industry",
+                 "feed supplement", "animal feed", "disease control",
+                 # 비교용: 영문 키워드로 못 잡는 현지어 표현
+                 "fiebre aftosa", "gripe aviar"]
+          end = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+          arts = gkg_collector.collect(kws, end - timedelta(days=7), end)
+          print("언론사 상위:", Counter(a["press"] for a in arts).most_common(10))
+          for a in arts[:25]:
+              print(f"  - {a['published_at'][:16]} | {a['press']} | {a['title'][:95]}")
+          PY
