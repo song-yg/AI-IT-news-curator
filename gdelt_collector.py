@@ -17,6 +17,7 @@ import requests.utils as _requests_utils
 
 import pandas as pd
 
+import gkg_collector
 import keyword_source
 from gdeltdoc import GdeltDoc, Filters
 from gdeltdoc.errors import RateLimitError
@@ -632,6 +633,24 @@ def collect(keywords: list[str] | None = None, deadline: float | None = None,
     if skipped_due_to_budget:
         unique_skipped = list(dict.fromkeys(skipped_due_to_budget))
         print(f"[gdelt] 🟡 주의 - 시간 예산 초과로 미시도 키워드 {len(unique_skipped)}개: {unique_skipped}")
+
+    # --- 3단계: GKG 원본 파일 대체 수집 - DOC API 조절/장애(429·{}) 대응 ---
+    # DOC 전체 0건이면 전 키워드(학습형 스킵 키워드 포함 - GKG는 짧은 키워드도 매칭 가능),
+    # 일부만 실패/미시도면 그 키워드만.
+    if not all_articles:
+        gkg_keywords = list(target_keywords)
+    else:
+        gkg_keywords = list(dict.fromkeys(failed_keywords + list(skipped_due_to_budget)))
+    if gkg_keywords:
+        try:
+            gkg_articles = gkg_collector.collect(gkg_keywords, window_start, window_end,
+                                                 is_false_positive=_is_false_positive)
+            seen = {a["url"] for a in all_articles}
+            added = [a for a in gkg_articles if a["url"] not in seen]
+            all_articles.extend(added)
+            print(f"[gdelt] GKG 대체 수집으로 {len(added)}건 추가")
+        except Exception as e:
+            print(f"[gdelt] 🔴 조치필요 [GD-12] - GKG 대체 수집 실패: {type(e).__name__} - {e!r}")
 
     _update_skip_state_after_run()
     _update_crowding_state_after_run()
