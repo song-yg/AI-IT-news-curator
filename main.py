@@ -64,6 +64,10 @@ def run_collectors(window_start: datetime, window_end: datetime,
             deadline=deadline, window_start=window_start, window_end=window_end)
         all_articles.extend(gdelt_articles)
         print(f"[main] GDELT 수집 완료 - {len(gdelt_articles)}건")
+        if not gdelt_articles:
+            # 하루치 영문 키워드 전체가 0건인 건 사실상 불가능 - 조용히 넘어가지 않도록 실패 소스로 표시(메일에도 노출됨).
+            print("[main] 🔴 조치필요 [MN-04] - GDELT 수집 결과 0건 - API 조절/장애 의심")
+            failed_sources.append("GDELT(0건)")
     except Exception as e:
         print(f"[main] 🔴 조치필요 [MN-03] - GDELT 수집 실패: {type(e).__name__} - {e!r}")
         failed_sources.append("GDELT")

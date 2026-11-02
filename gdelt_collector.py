@@ -15,9 +15,16 @@ import requests
 import requests.sessions
 import requests.utils as _requests_utils
 
+import pandas as pd
+
 import keyword_source
 from gdeltdoc import GdeltDoc, Filters
 from gdeltdoc.errors import RateLimitError
+
+
+class GdeltEmptyResponseError(RateLimitError):
+    """HTTP 200인데 본문이 `{}`(articles 키 없음)인 응답 - GDELT 조절(throttle) 상태로 간주.
+    진짜 0건이면 `{"articles": []}`가 오므로 구분 가능. RateLimitError를 상속해 429와 같은 백오프로 재시도."""
 
 
 # gdeltdoc이 헤더 주입을 지원 안 해서 requests 기본 헤더를 오버라이드(User-Agent 없으면 429 유발 이슈 확인됨).
@@ -276,7 +283,8 @@ def _call_with_retry(func, *args, label: str = "", **kwargs):
             wait = server_wait if server_wait is not None else BACKOFF_BASE_SECONDS * (2 ** rate_limit_attempt)
             rate_limit_attempt += 1
             now_str = datetime.now(timezone.utc).isoformat(timespec="seconds")
-            print(f"[gdelt] {now_str} - {label} - 429 rate limit - {wait:.0f}초 전역 쿨다운 설정 "
+            kind = "빈 응답({}) - 조절로 추정" if isinstance(e, GdeltEmptyResponseError) else "429 rate limit"
+            print(f"[gdelt] {now_str} - {label} - {kind} - {wait:.0f}초 전역 쿨다운 설정 "
                   f"({rate_limit_attempt}/{MAX_RETRIES})")
             _trigger_cooldown(wait)
         except (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError):
@@ -286,6 +294,15 @@ def _call_with_retry(func, *args, label: str = "", **kwargs):
             print(f"[gdelt] {label} - 접속 실패 - {NETWORK_ERROR_WAIT_SECONDS}초 대기 후 재시도 "
                   f"({network_attempt}/{NETWORK_ERROR_MAX_RETRIES})")
             time.sleep(NETWORK_ERROR_WAIT_SECONDS)
+
+
+def _article_search(gd: "GdeltDoc", filters: "Filters") -> pd.DataFrame:
+    """gd.article_search 대체. 라이브러리는 `{}` 응답을 빈 DataFrame으로 바꿔버려서
+    '진짜 0건'과 '조절당해서 빈 응답'을 구분 못 함 - 원본 dict를 직접 보고 판단."""
+    data = gd._query("artlist", filters.query_string)
+    if not isinstance(data, dict) or "articles" not in data:
+        raise GdeltEmptyResponseError(f"articles 키 없는 응답: {str(data)[:100]!r}")
+    return pd.DataFrame(data["articles"])
 
 
 def _parse_seendate(raw: str) -> datetime:
@@ -322,7 +339,7 @@ def _collect_articles_for_keyword(gd: "GdeltDoc", keyword: str,
     false_positive_count = 0
 
     try:
-        articles_df = _call_with_retry(gd.article_search, f, label=f"{keyword} / article_search")
+        articles_df = _call_with_retry(_article_search, gd, f, label=f"{keyword} / article_search")
 
         if articles_df is not None and not articles_df.empty:
             for _, row in articles_df.iterrows():
@@ -374,7 +391,7 @@ def _collect_articles_for_keywords(gd: "GdeltDoc", keywords: list[str],
     false_positive_count = 0
 
     try:
-        articles_df = _call_with_retry(gd.article_search, f, label=f"{label} / article_search")
+        articles_df = _call_with_retry(_article_search, gd, f, label=f"{label} / article_search")
 
         if articles_df is not None and not articles_df.empty:
             for _, row in articles_df.iterrows():
