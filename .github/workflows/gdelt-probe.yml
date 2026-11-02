@@ -1,0 +1,26 @@
+# GDELT 수집 진단용 - 파이프라인/데이터와 무관. 이 브랜치에 push하거나 수동 실행 시에만 돎.
+name: GDELT 수집 테스트
+
+on:
+  push:
+    branches: [fix/gdelt-empty-response]
+    paths: [gdelt_probe.py, gdelt_collector.py, .github/workflows/gdelt-probe.yml]
+  workflow_dispatch:
+    inputs:
+      keywords:
+        description: '테스트 키워드(공백 구분, 여러 단어는 따옴표)'
+        required: false
+        default: ''
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q requests gdeltdoc pandas
+      - name: GDELT 테스트 실행
+        run: eval "python -u gdelt_probe.py ${{ github.event.inputs.keywords }}"

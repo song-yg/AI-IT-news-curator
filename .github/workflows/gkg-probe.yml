@@ -1,0 +1,37 @@
+# GDELT GKG 원본 파일 대체 경로 진단용 - 파이프라인/데이터와 무관(저장·커밋 안 함).
+name: GDELT GKG 파일 테스트
+
+on:
+  push:
+    branches: [fix/gdelt-empty-response]
+    paths: [gkg_probe.py, gkg_collector.py, .github/workflows/gkg-probe.yml]
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q requests
+      - name: 하루치 GKG 대체 수집(실제 시트 키워드, 어제 구간)
+        env:
+          KEYWORD_SHEET_CSV_URL: ${{ vars.KEYWORD_SHEET_CSV_URL }}
+        run: |
+          python -u - <<'PY'
+          from datetime import datetime, timedelta, timezone
+          from collections import Counter
+          import gkg_collector, keyword_source
+          kws = keyword_source.get_keywords("en", ["artificial intelligence", "nvidia", "semiconductor", "chatgpt", "openai"])
+          print("키워드:", kws)
+          now = datetime.now(timezone.utc)
+          end = now.replace(hour=15, minute=0, second=0, microsecond=0)
+          if end > now: end -= timedelta(days=1)
+          arts = gkg_collector.collect(kws, end - timedelta(days=1), end)
+          print("언론사 상위:", Counter(a["press"] for a in arts).most_common(8))
+          for a in arts[:15]:
+              print(f"  - {a['published_at'][:16]} | {a['press']} | {a['title'][:90]}")
+          PY
