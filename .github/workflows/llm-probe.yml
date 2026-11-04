@@ -1,0 +1,18 @@
+# OpenRouter 무료 모델 진단용 - 파이프라인/데이터와 무관.
+name: LLM 모델 테스트
+on:
+  push:
+    branches: [test/llm-probe]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q requests
+      - env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: python -u tools/llm_probe.py
