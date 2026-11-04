@@ -84,14 +84,14 @@ def _request_openrouter(system_prompt: str, user_prompt: str, api_key: str,
     resp = session.post(_ig.LLM_API_URL_OPENROUTER, headers=headers, json=body, timeout=30)
     resp.raise_for_status()
     data = resp.json()
-    return data["choices"][0]["message"]["content"].strip(), data
+    return llm_rate_limiter.extract_content(data), data
 
 
 def _call_llm(system_prompt: str, user_prompt: str, api_key: str, session: requests.Session) -> str | None:
     """issue_grouper의 OpenRouter 모델 체인으로 호출, 응답 텍스트 반환. 실패 시 None."""
     data = None
     try:
-        chain = _ig._LLM_MODEL_CHAIN_OPENROUTER_ROLES
+        chain = llm_rate_limiter.live_chain(_ig._LLM_MODEL_CHAIN_OPENROUTER_ROLES)
         role_codes = {"1순위": "LS-01", "2순위": "LS-02", "3순위": "LS-03", "최종 안전망": "LS-04"}
         last_error: Exception | None = None
         for idx, (role, model_name) in enumerate(chain):
@@ -103,6 +103,7 @@ def _call_llm(system_prompt: str, user_prompt: str, api_key: str, session: reque
                 return text
             except Exception as e:
                 last_error = e
+                llm_rate_limiter.report_failure(model_name, e, "llm_summarizer")
                 code = role_codes[role]
                 is_final = idx == len(chain) - 1
                 level = "🔴 조치필요" if is_final else "🟡 주의"

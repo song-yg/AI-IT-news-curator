@@ -164,12 +164,12 @@ def _request_openrouter(system_prompt: str, user_prompt: str, api_key: str,
     resp = session.post(LLM_API_URL_OPENROUTER, headers=headers, json=body, timeout=30)
     resp.raise_for_status()
     data = resp.json()
-    return data["choices"][0]["message"]["content"].strip()
+    return llm_rate_limiter.extract_content(data)
 
 def _request_llm_text(system_prompt: str, user_prompt: str, api_key: str, session: requests.Session,
                        label: str, validate=None):
     """모델 체인(1순위->2순위->3순위->최종 안전망)을 순서대로 시도, 실패하면 다음 모델로."""
-    chain = _LLM_MODEL_CHAIN_OPENROUTER_ROLES
+    chain = llm_rate_limiter.live_chain(_LLM_MODEL_CHAIN_OPENROUTER_ROLES)
     last_error: Exception | None = None
     for idx, (role, model_name) in enumerate(chain):
         is_final = idx == len(chain) - 1
@@ -181,6 +181,7 @@ def _request_llm_text(system_prompt: str, user_prompt: str, api_key: str, sessio
             return validate(text, is_final) if validate else text
         except Exception as e:
             last_error = e
+            llm_rate_limiter.report_failure(model_name, e, "relevance_filter")
             code = _LLM_MODEL_ROLE_ERROR_CODE[role]
             level = "🔴 조치필요" if is_final else "🟡 주의"
             next_note = "더 시도할 모델 없음 - 이 배치 전체 안전 처리" if is_final else "다음 후보 모델로 재시도"

@@ -38,10 +38,14 @@ def _compute_collection_window(reference: datetime | None = None) -> tuple[datet
 TOP_N = int(os.environ.get("TOP_N") or 5)
 CATEGORY_TOP_N = int(os.environ.get("CATEGORY_TOP_N") or 1)
 
-# 관련성 필터/카테고리 재분류만 시간예산을 둠(그룹 수는 수집량에 비례해서 늘 수 있음).
-# 그룹핑/4차 재검토/요약은 float("inf")로 무제한(TOP_N 고정값이라 규모가 안 커짐).
+# 단계별 시간예산(process_stage 파이썬 시작 기준 절대 마감). process Job 하드캡 360분 - 셋업 ~5분 - 배포/커밋 여유.
+# 2026-11: LLM 모델이 죽으면 그룹핑 3차만으로 6시간을 넘겨 메일 없이 취소됨(#105·#106) -> 전 단계에 상한.
+# 예산을 넘긴 단계는 남은 작업을 안전한 기본값(안 묶음/통과/기존 순위/제목만)으로 처리하고 다음으로 넘어감.
+GROUPING_TIME_BUDGET_SECONDS = 2 * 60 * 60
 RELEVANCE_TIME_BUDGET_SECONDS = 4 * 60 * 60
-CATEGORY_RECLASSIFY_TIME_BUDGET_SECONDS = 5 * 60 * 60
+CATEGORY_RECLASSIFY_TIME_BUDGET_SECONDS = int(4.5 * 60 * 60)
+STAGE4_TIME_BUDGET_SECONDS = 5 * 60 * 60 + 5 * 60
+SUMMARY_TIME_BUDGET_SECONDS = 5 * 60 * 60 + 25 * 60
 
 
 def run_collectors(window_start: datetime, window_end: datetime,
@@ -237,9 +241,9 @@ def run_process(articles: list[dict], gdelt_timeline: dict, failed_sources: list
 
     deadline_relevance = process_start + RELEVANCE_TIME_BUDGET_SECONDS
     deadline_category = process_start + CATEGORY_RECLASSIFY_TIME_BUDGET_SECONDS
-    deadline_grouping = float("inf")
-    deadline_stage4 = float("inf")
-    deadline_summary = float("inf")
+    deadline_grouping = process_start + GROUPING_TIME_BUDGET_SECONDS
+    deadline_stage4 = process_start + STAGE4_TIME_BUDGET_SECONDS
+    deadline_summary = process_start + SUMMARY_TIME_BUDGET_SECONDS
 
     error_log.start_capture()
 
