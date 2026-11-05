@@ -50,7 +50,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
+          # cache: "pip" 제거 - 아래 설치가 --no-cache-dir라 저장할 pip 캐시 폴더가 안 생김.
+          # 러너 Python 버전이 바뀌어 캐시 키가 빗나가면 Post 단계가 "Cache folder ... doesn't exist"로
+          # 실패해 collect Job 전체가 failure 처리됨(2026-11-05 회차 #107, 3.11.17 -> 3.11.18).
 
       - name: 파이썬 의존성 설치
         run: pip install -r requirements.txt --no-cache-dir
