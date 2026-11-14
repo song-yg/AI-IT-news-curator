@@ -1,201 +1,213 @@
 # AI·IT 뉴스 큐레이션 - 2026-11-14
 
-생성 시각(UTC): 2026-11-14T02:22:25.546745+00:00
+생성 시각(UTC): 2026-11-14T23:17:07.872307+00:00
 
 
 ## 카테고리별 전일·7일 평균 대비 증감
 
 ### 국내
-- 로봇공학: 425건 (전일 394건(+31), 7일 평균 376.0건(+49.0))
-- 기업 단위: 569건 (전일 461건(+108), 7일 평균 255.0건(+314.0))
-- 인공지능: 1661건 (전일 1900건(-239), 7일 평균 1694.0건(-33.0))
-- 기타 IT 기술: 343건 (전일 540건(-197), 7일 평균 401.2건(-58.2))
-- 기타: 1538건 (전일 1449건(+89), 7일 평균 850.2건(+687.8))
-- 반도체: 218건 (전일 144건(+74), 7일 평균 237.2건(-19.2))
+- 기업 단위: 348건 (전일 461건(-113), 7일 평균 255.0건(+93.0))
+- 로봇공학: 86건 (전일 394건(-308), 7일 평균 376.0건(-290.0))
+- 기타 IT 기술: 258건 (전일 540건(-282), 7일 평균 401.2건(-143.2))
+- 기타: 531건 (전일 1449건(-918), 7일 평균 850.2건(-319.2))
+- 반도체: 110건 (전일 144건(-34), 7일 평균 237.2건(-127.2))
+- 인공지능: 626건 (전일 1900건(-1274), 7일 평균 1694.0건(-1068.0))
 
 ### 해외
-- 로봇공학: 0건 (전일 11건(-11), 7일 평균 3.8건(-3.8))
-- 기업 단위: 28건 (전일 1043건(-1015), 7일 평균 228.7건(-200.7))
-- 인공지능: 30건 (전일 882건(-852), 7일 평균 265.2건(-235.2))
-- 기타 IT 기술: 7건 (전일 13건(-6), 7일 평균 16.8건(-9.8))
-- 기타: 9건 (전일 8건(+1), 7일 평균 14.7건(-5.7))
+- 기업 단위: 16건 (전일 1043건(-1027), 7일 평균 228.7건(-212.7))
+- 로봇공학: 2건 (전일 11건(-9), 7일 평균 3.8건(-1.8))
+- 기타 IT 기술: 20건 (전일 13건(+7), 7일 평균 16.8건(+3.2))
+- 기타: 1건 (전일 8건(-7), 7일 평균 14.7건(-13.7))
 - 반도체: 3건 (전일 4건(-1), 7일 평균 4.2건(-1.2))
+- 인공지능: 36건 (전일 882건(-846), 7일 평균 265.2건(-229.2))
 ## 국내
 
-### 젠슨 황(Jensen Huang) 엔비디아(NVIDIA) CEO 사임 소식에 증시·가상자산 시장 출렁
-*원문: [사사건건] 젠슨 황 결국 사퇴…AI 반도체 영향은?*
-- 언급 855건 (그룹 내 추가 2222건 생략)
-- 🔗 반대 축에서도 다뤄짐: Une panne majeure touche la messagerie Outlook de Microsoft , des dizaines de milliers dutilisateurs touchés
+### 엔비디아(NVIDIA) CEO 사임·후임 후보 거론과 삼성전자(Samsung Electronics) 모딘(Modin) 인수 추진 등 글로벌 IT·증시 동향
+*원문: [뉴욕증시 주간] 3대 지수 2%대 동반 상승…엔비디아는 CEO 사임에 13% 가...*
+- 언급 420건 (그룹 내 추가 992건 생략)
 
-젠슨 황(Jensen Huang) 엔비디아(NVIDIA) CEO 사임 보도가 나온 가운데 코스피(KOSPI)가 장중 3%까지 급등했다가 하락세로 돌아서 0.98% 내렸고, 삼성전자(Samsung Electronics)와 SK하이닉스(SK Hynix) 등 반도체주도 동반 하락했다. 블록체인 데이터에 따르면 엔비디아(NVIDIA) 롱 포지션 9959개, 약 21억원 어치가 전량 청산됐다. 후임 찾기가 난항을 겪을 것이라는 전망과 함께 국내 HBM 협상력이 커질 가능성도 거론된다.
+미국 뉴욕 증시 3대 지수가 2%대 동반 상승했으나 엔비디아(NVIDIA)는 CEO 사임 여파로 주가가 하락하고 트루이스트(Truist)가 목표가를 하향 조정하며 투자의견을 '보유'로 제시했다. 엔비디아(NVIDIA)는 크레스(Kress) 임시 CEO 체제로 전환해 조직 안정을 도모하고 후임 후보로 르네 하스(Rene Haas)가 거론된다. 삼성전자(Samsung Electronics)는 미국 데이터센터 냉각업체 모딘(Modin) 인수를 최대 10조 원 규모로 추진 중이다.
 
-원문 링크: https://news.kbs.co.kr/news/pc/view/view.do?ncd=8712271&ref=A, https://www.tokenpost.kr/news/ai/437858, https://futurechosun.com/?p=166591 외 2220건
+원문 링크: https://www.thefairnews.co.kr/news/articleView.html?idxno=94169, https://www.sedaily.com/article/20114305?ref=naver, https://www.sedaily.com/article/20114302?ref=naver 외 990건
 
-### 델 테크놀로지스, 6세대 AMD EPYC (에픽) 탑재 '파워엣지' 서버 2종 공개
-*원문: 브랜드씽킹AI, ㈜해랑 '이천기정떡' 공식몰 GEO 진단·개편*
-- 언급 141건 (그룹 내 추가 146건 생략)
+### 전 세계 업무 마비시킨 MS365 서비스 장애, 36시간 만에 복구
+*원문: 전 세계 업무 마비시킨 MS 서비스 장애 36시간 만에 복구...피해 신고 74...*
+- 언급 132건 (그룹 내 추가 136건 생략)
+- 🔗 반대 축에서도 다뤄짐: Serviços da Microsoft estão a recuperar em várias regiões
 
-델 테크놀로지스가 6세대 AMD EPYC (에픽) 프로세서를 탑재한 파워엣지 서버 2종을 공개했다. 신제품은 기존 데이터센터에서 AI와 고성능 컴퓨팅 (HPC) 성능을 높이는 데 초점을 맞췄으며, 델 엑사스케일 스토리지 (Dell Exascale Storage)와 연동해 인프라 확장을 지원한다. 서버 관리를 위한 iDRAC 10과 오픈매니지 엔터프라이즈 (OpenManage Enterprise) 도구도 함께 제공된다.
+마이크로소프트(MS)의 클라우드 서비스 MS365에서 전 세계적인 접속 장애가 발생해 아웃룩(Outlook), 팀즈(Teams), 익스체인지 온라인(Exchange Online) 등 이메일과 협업 기능에 차질이 빚어졌다. 장애는 약 36시간 만에 복구됐으며 피해 신고는 740만건에 달했고, MS 측은 외부의 악의적인 활동은 확인되지 않았다고 밝혔다. 같은 기간 미국 연방항공청(FAA) 관제 시스템 문제로 항공편 결항 등 항공 대란이 빚어졌으며, 한국인 여행객 등 피해도 보고됐다.
 
-원문 링크: https://www.joongang.co.kr/article/25478323, https://www.boannews.com/news/articleView.html?idxno=147243, https://www.gukjenews.com/news/articleView.html?idxno=3751512 외 144건
+원문 링크: https://www.g-enews.com/view.php?ud=2026111420125744731a5c2dd38_1, https://www.edaily.co.kr/News/Read?newsId=02719126645645720&mediaCodeNo=257&utm_source=naver&utm_medium=referral&utm_campaign=news_syndication&utm_content=original_article, http://www.wowtv.co.kr/NewsCenter/News/Read?articleId=A202611140053&t=NN 외 134건
 
-### 토스, 금융보안 AI 해킹방어 대회 대상…계열사 6년 연속 우승
-*원문: 토스, 금융보안 AI 해킹방어 대회 대상⋯6년 연속 우승팀 배출*
-- 언급 108건 (그룹 내 추가 108건 생략)
+### 세무사·수능 시험에서 AI 안경 사용 논란… 부정행위 방지 요구
+*원문: AI시대 세무사시험 수석 합격자 논란의 역설?*
+- 언급 60건 (그룹 내 추가 63건 생략)
 
-토스가 '금융보안 AI 해킹방어 대회'에서 대상을 차지하며, 계열사와 함께 6년 연속 우승팀을 배출했다. 토스증권은 2위를 기록해 토스 계열사가 상위를 휩쓸었다. 토스는 화이트해커 전담팀과 버그바운티 프로그램, PCI-DSS·ISO27001·ISMS-P 등 보안 인증을 통해 보안 체계를 운영 중이다.
+유튜버와 테크몽 등이 AI 안경을 착용하고 세무사 1차 시험과 대학수학능력시험 문제를 푸는 실험을 진행했으며, 세무사 시험에서는 400점 만점을 받았다는 결과가 공개됐다. 세무사 시험 수석 합격자는 AI 안경 부정행위 의혹을 부인했고, 시험 감독을 강화해달라는 국회 청원 등이 제기됐다.
 
-원문 링크: https://www.etoday.co.kr/news/view/2647879, https://www.pinpointnews.co.kr/news/articleView.html?idxno=503665, https://www.tokenpost.kr/news/policy/437677 외 106건
+원문 링크: https://www.newsian.co.kr/news/articleView.html?idxno=101272, https://www.topstarnews.net/news/articleView.html?idxno=16276415, https://www.newsis.com/view/NISX20261114_0003867977 외 61건
 
-### 구글 제미나이 탑재 AI 스마트글래스 공개…젠틀몬스터·삼성 협업, 사전 예약 품절
-*원문: 구글, 제미나이 스마트글래스 출시 앞두고 '사생활 보호' 승부수*
-- 언급 98건 (그룹 내 추가 99건 생략)
+### 경북도, 박정희 탄신 109돌 기념식 개최…AI 영상 메시지와 제3세대 새마을운동 발표
+*원문: "산업화 기적에서 AI 새마을운동으로"…경북도, 박정희 대통령 탄신 109...*
+- 언급 27건 (그룹 내 추가 26건 생략)
 
-구글(Google)이 생성형 AI 제미나이(Gemini)를 탑재한 스마트글래스를 젠틀몬스터(Gentle Monster), 삼성전자(Samsung Electronics) 등과 협업해 공개했고, 사전 예약 시작 수 시간 만에 주요 제품이 품절됐다. 가격은 395달러부터 시작하지만 렌즈는 별도라는 점도 언급됐다. 한편 해당 안경을 이용해 세무사 시험 문제를 실시간으로 풀었다는 논란이 일며 AI 부정행위 우려도 제기됐다.
+경상북도가 박정희 대통령 탄신 109돌을 맞아 구미에서 기념행사를 열었다. 행사에는 인공지능(AI) 기술로 복원된 박정희 전 대통령의 영상 메시지가 소개됐으며, 도는 청년과 AI·디지털 기술을 결합한 제3세대 새마을운동을 통해 지역혁신 모델을 만들겠다고 밝혔다.
 
-원문 링크: https://www.digitaltoday.co.kr/news/articleView.html?idxno=715272, https://www.topstarnews.net/news/articleView.html?idxno=16276139, https://www.insight.co.kr/news/582004 외 97건
+원문 링크: https://www.gukjenews.com/news/articleView.html?idxno=3751960, https://www.news2day.co.kr/article/20261114500037, https://www.hidomin.com/news/articleView.html?idxno=729301 외 24건
 
-### LG유플러스, 카테나-X(Catena-X)와 협력…국내 제조기업 글로벌 데이터 공급망 진입 지원
-*원문: LG유플러스, 카테나-X와 데이터 연계…국내 제조기업 글로벌 공급망 진...*
-- 언급 89건 (그룹 내 추가 88건 생략)
+### 오픈AI, 카드 3사와 AI 에이전트 결제 지갑 '챗GPT 월렛' 출시
+*원문: AI 동시 결제에 금융망 과부하 우려…유동성 압박 가능성*
+- 언급 24건 (그룹 내 추가 23건 생략)
 
-LG유플러스가 카테나-X(Catena-X)와 협력해 국내 제조기업의 글로벌 데이터 공급망 진입을 지원한다. 통신·클라우드·보안·시스템통합(SI) 등 ICT 역량과 B2B 사업 경험을 바탕으로 데이터 연계 및 운영을 돕는다. 자동차·부품사를 중심으로 한 제조업 데이터 생태계 구축이 목표다.
+오픈AI(OpenAI)가 미국 챗GPT(ChatGPT) 프로 이용자를 대상으로 AI 에이전트가 상품 구매와 결제를 대신 지원하는 '챗GPT 월렛(ChatGPT Wallet)'을 출시했다. 아메리칸익스프레스(American Express)·마스터카드(Mastercard)·비자(Visa) 등 카드 3사와 협력해 개발됐으며, 이용자가 등록한 카드로 결제할 수 있다. AI가 구매를 지원하더라도 최종 결제 승인은 이용자가 하며, 일부 인터페이스에서는 사용할 수 없다.
 
-원문 링크: https://www.e-science.co.kr/news/articleView.html?idxno=139715, https://economist.co.kr/article/view/ecn202611130011, https://www.newsworks.co.kr/news/articleView.html?idxno=903068 외 86건
+원문 링크: http://www.inews24.com/view/2025908, https://www.tokenpost.kr/news/breaking/437964, https://www.ddaily.co.kr/page/view/2026111407162097672 외 21건
 
 ### 국내 - 카테고리별 Top N
 
 #### 인공지능
 
-### AI 브랜드 경쟁력과 서버 인프라 확장 등 IT·AI 업계 주요 소식
-*원문: 브랜드씽킹AI, ㈜해랑 '이천기정떡' 공식몰 GEO 진단·개편*
-- 언급 141건 (그룹 내 추가 146건 생략)
+### AI 안경 시험 부정행위 논란…세무사 수석 합격자 의혹 부인 및 감독 강화 요구
+*원문: AI시대 세무사시험 수석 합격자 논란의 역설?*
+- 언급 60건 (그룹 내 추가 63건 생략)
 
-델 테크놀로지스(Dell Technologies)가 6세대 AMD 에픽(EPYC) 프로세서를 탑재한 파워엣지(PowerEdge) 서버 2종을 공개해 기존 데이터센터의 AI·고성능 컴퓨팅(HPC) 성능 강화를 지원한다. 강원특별자치도와 한전KDN이 '2026 대한민국 AI 브랜드 대상'과 대한민국소통어워즈에서 수상했으며, 젠스파크(Genspark.ai)는 생성형 AI 취업 박람회에 참여한다. 브랜드씽킹AI는 ㈜해랑 '이천기정떡' 공식몰에 생성형 엔진 최적화(GEO, Generative Engine Optimization) 진단과 개편을 적용했다.
+유튜버가 AI 안경을 이용해 세무사 1차 시험 160문항을 49분 만에 풀어 400점 만점을 받았고, 수학 6~7등급인 유튜버 감스트도 AI 안경을 쓰고 수능 수학에서 5문제만 틀렸다는 실험 결과가 공개됐다. 이에 세무사 시험 수석 합격자가 AI 안경 부정행위 의혹을 부인했고, 시험 부정행위를 막기 위한 감독 강화를 요구하는 국회 청원이 제기됐다. AI 콘텐츠 확산 속 인간의 창작 가치와 결정 주체에 대한 논의도 함께 제기되고 있다.
 
-원문 링크: https://www.joongang.co.kr/article/25478323, https://www.boannews.com/news/articleView.html?idxno=147243, https://www.gukjenews.com/news/articleView.html?idxno=3751512 외 144건
-
-#### 기업 단위
-
-### LG유플러스, 카테나-X(Catena-X)와 협력…국내 제조기업 글로벌 데이터 공급망 진입 지원
-*원문: LG유플러스, 카테나-X와 데이터 연계…국내 제조기업 글로벌 공급망 진...*
-- 언급 89건 (그룹 내 추가 88건 생략)
-
-LG유플러스가 카테나-X(Catena-X)와 협력해 국내 제조기업의 글로벌 데이터 공급망 진입을 지원한다. 통신·클라우드·보안·시스템통합(SI) 등 정보통신기술(ICT) 역량과 기업 간 거래(B2B) 경험을 바탕으로 데이터 연계와 운영을 돕는다. 자동차·부품사를 포함한 제조업 데이터 생태계 구축이 목표다.
-
-원문 링크: https://www.e-science.co.kr/news/articleView.html?idxno=139715, https://economist.co.kr/article/view/ecn202611130011, https://www.newsworks.co.kr/news/articleView.html?idxno=903068 외 86건
+원문 링크: https://www.newsian.co.kr/news/articleView.html?idxno=101272, https://www.topstarnews.net/news/articleView.html?idxno=16276415, https://www.newsis.com/view/NISX20261114_0003867977 외 61건
 
 #### 기타 IT 기술
 
-### 북한 해커, 가짜 화상회의로 가상자산 4억 달러 이상 탈취…FBI '페이스스틸러(FaceStealer)' 경고
-*원문: 북한 해커, 가짜 화상회의로 가상자산 4억 달러 이상 탈취…미 FBI, '페이...*
-- 언급 20건 (그룹 내 추가 19건 생략)
+### 전 세계 업무 마비시킨 MS 서비스 장애, 36시간 만에 복구
+*원문: 전 세계 업무 마비시킨 MS 서비스 장애 36시간 만에 복구...피해 신고 74...*
+- 언급 132건 (그룹 내 추가 136건 생략)
+- 🔗 반대 축에서도 다뤄짐: Serviços da Microsoft estão a recuperar em várias regiões
 
-미국 연방수사국(FBI)은 북한 해커가 가짜 화상회의와 딥페이크 영상을 이용해 가상자산 4억 달러 이상을 탈취한 '페이스스틸러(FaceStealer)' 캠페인을 공개했다. 공격 배후는 '사파이어 슬리트(Sapphire Sleet)' 또는 'UNC1069'로 알려진 북한 해커 집단이며, 미 법무부(DOJ)는 관련 클라우드 인프라를 압수했다. 이와 별개로 바이낸스 해킹 자금에 대한 동결·압수 소식도 있으나, 두 사건의 직접적 연관성은 주어진 정보에서 명확하지 않다.
+마이크로소프트(MS)의 클라우드 서비스 장애가 전 세계 업무 시스템을 마비시킨 지 약 36시간 만에 복구되었다. 이번 장애는 익스체인지 온라인(Exchange Online), 아웃룩(Outlook), 팀즈(Teams), 인공지능 비서 코파일럿(Copilot) 등에 집중되었으며, MS 측은 외부 악의적 활동은 확인되지 않았다고 밝혔다. 피해 신고는 740만 건에 달했다.
 
-원문 링크: https://www.dailysecu.com/news/articleView.html?idxno=209508, https://news.tvchosun.com/site/data/html_dir/2026/11/13/2026111390168.html, https://www.livebiz.today/news/articleView.html?idxno=206484 외 17건
+원문 링크: https://www.g-enews.com/view.php?ud=2026111420125744731a5c2dd38_1, https://www.edaily.co.kr/News/Read?newsId=02719126645645720&mediaCodeNo=257&utm_source=naver&utm_medium=referral&utm_campaign=news_syndication&utm_content=original_article, http://www.wowtv.co.kr/NewsCenter/News/Read?articleId=A202611140053&t=NN 외 134건
+
+#### 기업 단위
+
+### 커서, 파이어웍스 노출 키가 출발점…클로드 코드 악성 확장 배포로 최대 5000명 영향 가능성
+*원문: 커서, 클로드 코드 악성 확장의 출발점으로 파이어웍스 지목…노출된 키...*
+- 언급 4건 (그룹 내 추가 3건 생략)
+
+커서는 내부 시스템에서 노출된 자격 증명을 이용해 공격자가 변조된 클로드 코드(Claude Code) 확장 프로그램을 자사 마켓플레이스에 배포했다고 밝혔다. 이번 사고의 출발점으로 외부 AI 인프라 업체 파이어웍스(Fireworks)가 지목됐으며, 최대 약 5000명이 악성 확장을 받았을 가능성이 있다. 오픈VSX(Open VSX)는 악성 코드를 배포하지 않은 것으로 확인됐다.
+
+원문 링크: https://www.wikitree.co.kr/articles/1174642, https://www.tokenpost.kr/news/breaking/438199, https://www.tokenpost.kr/news/breaking/438276 외 1건
+
+#### 반도체
+
+### 어플라이드 머티어리얼즈(Applied Materials), 대만 매출 중국 추월…4분기 실적 신기록에도 월가(Wall Street) 목표주가는 하향
+*원문: 대만 3조8958억원…어플라이드 머티어리얼즈($AMAT) 중국 추월*
+- 언급 2건 (그룹 내 추가 1건 생략)
+
+어플라이드 머티어리얼즈(Applied Materials)가 4분기 매출 13조9000억 원을 기록하며 사상 최대 실적을 냈다. 반도체 시스템 부문 매출은 전년 동기보다 64% 증가했고, D램과 첨단 패키징 매출이 각각 최고치를 기록했다. 한국과 대만 지역 반도체 장비 매출도 분기 최고치를 썼으나, 실적 호조에도 월가(Wall Street)에서는 목표주가를 낮춘 것으로 나타났다.
+
+원문 링크: https://www.tokenpost.kr/news/market/438155, https://www.g-enews.com/view.php?ud=202611141203439792fbbec65dfb_1
 
 #### 로봇공학
 
-### 대구 엑스코서 제21회 국제로봇콘테스트 개최…전국 로봇 인재 2271명 참가
-*원문: 대구서 제21회 국제로봇콘테스트 개최…전국 로봇 인재 2271명 참가*
-- 언급 30건 (그룹 내 추가 65건 생략)
+### 이란 "바레인 (Bahrain) 美 조기경보 레이더 타격"…미국 "이란 드론 요격"
+*원문: 미국 중부사령부, ‘바레인 내 미군 레이더 파괴’ 이란 주장 부인*
+- 언급 9건 (그룹 내 추가 10건 생략)
 
-대구광역시와 산업통상부가 공동 주최하는 제21회 국제로봇콘테스트(IRC·International Robot Contest)가 13일부터 14일까지 이틀간 대구 엑스코(EXCO)에서 열린다. 12개 대회, 54개 종목으로 진행되며 지난해보다 약 1.8배 늘어난 2271명의 로봇 인재가 참가해 대통령상 등 136점을 놓고 경합한다. 발전소 고위험 작업 자동화, 디지털트윈, AI 기반 로봇팔 제어 등 산업 수요를 반영한 종목과 AI 로봇 기술 체험 프로그램이 마련된다.
+이란은 바레인을 향해 자폭 드론 2대를 발사해 미국 조기경보 레이더를 타격했다고 주장했으나, 미국 중부사령부 (CENTCOM)는 두 대 모두 요격했다고 반박했다. 이란 혁명수비대 (IRGC)는 자체 개발 미사일과 드론 전시회를 열었으며, 호르무즈 해협 (Strait of Hormuz) 원유 수송로와 연계된 유가 우려도 제기됐으나 구체적 피해 여부는 확인되지 않았다.
 
-원문 링크: https://www.m-i.kr/news/articleView.html?idxno=2018322, https://www.eroun.net/news/articleView.html?idxno=95434, https://www.seoulfn.com/news/articleView.html?idxno=642769 외 63건
-
-#### 반도체
-
-### 국회 산자위, 호남 반도체·미래대응기금 예산안 이견…의결 무산
-*원문: 전남광주 반도체 예산안, 상임위 의결 무산*
-- 언급 13건 (그룹 내 추가 12건 생략)
-
-국회 산업통상자원중소벤처기업위원회(산자위)가 서남권 반도체 클러스터 조성 사업과 미래대응기금 예산을 둘러싼 여야 이견을 좁히지 못해 내년도 예산안 의결에 실패했다. 정부는 서남권 반도체 클러스터 사업 예산으로 1조5000억원을 편성했으나, 국민의힘은 산출 근거가 불명확하다며 반발했고 미래대응기금 전액 삭감을 주장했다. 이로 인해 관련 예산안 심사가 보류됐으며, 일부 예산안은 상임위 심사를 거치지 못한 채 처리되는 상황이다.
-
-원문 링크: https://news.kbs.co.kr/news/pc/view/view.do?ncd=8712575&ref=A, https://news.kbs.co.kr/news/pc/view/view.do?ncd=8712409&ref=A, https://www.ddaily.co.kr/page/view/2026111317230990206 외 10건
+원문 링크: https://www.voakorea.com/a/us-iran/8223417.html, https://news.kbs.co.kr/news/pc/view/view.do?ncd=8712735&ref=A, https://www.edaily.co.kr/News/Read?newsId=01292326645645720&mediaCodeNo=257&utm_source=naver&utm_medium=referral&utm_campaign=news_syndication&utm_content=original_article 외 8건
 
 ## 해외
 
-### 엔비디아 CEO 젠슨 황 사임 보도와 후임자 논의
-*원문: Who could replace the departed Jensen Huang as Nvidia CEO ? *
-- 언급 27건 (그룹 내 추가 26건 생략)
-
-여러 외신에서 엔비디아(Nvidia) CEO 젠슨 황(Jensen Huang)의 사임 또는 퇴진이 보도되고 있다. 일부 기사는 스캔들, 미 의회 청문회, 팀 쿡(Tim Cook) 후임자설 등 서로 다른 배경을 언급하며, 엔비디아와 AI 산업에 미칠 영향에 대한 전망도 제기되나 구체적인 사실관계는 불분명하다.
-
-원문 링크: https://www.aol.co.uk/articles/could-replace-departed-jensen-huang-000357000.html, https://www.theguardian.com/technology/2026/nov/12/jensen-huang-nvidia-ceo-replacement, https://www.breitbart.com/politics/2026/11/12/trump-pushes-for-nvidia-to-hire-former-apple-chief-tim-cook-to-replace-jensen-huang/ 외 24건
-
-### 마이크로소프트 서비스 전 세계 장애… Outlook, Teams, Copilot 등 접속 불량
-*원문: Une panne majeure touche la messagerie Outlook de Microsoft , des dizaines de milliers dutilisateurs touchés*
+### 엔비디아(Nvidia) 젠슨 황(Jensen Huang) CEO 사임 보도와 불륜 의혹, 후임자 르네 하스(Rene Haas) 거론
+*원문: Jensen Huang resigns as Nvidia CEO : Here what we know*
 - 언급 8건 (그룹 내 추가 7건 생략)
-- 🔗 반대 축에서도 다뤄짐: [사사건건] 젠슨 황 결국 사퇴…AI 반도체 영향은?
 
-마이크로소프트의 주요 서비스에 전 세계적인 장애가 발생해 Outlook, Teams, Copilot 등 이용에 차질이 빚어지고 있다. 수만 명의 사용자가 영향을 받은 것으로 보고되며, 마이크로소프트는 서비스 복구를 위해 작업 중이다. 일부 매체는 추가 서비스 장애도 전하고 있으나 정확한 범위는 확인되지 않았다.
+여러 언어권 매체에서 엔비디아(Nvidia) CEO 젠슨 황(Jensen Huang)의 사임과 여성 직원과의 불륜 의혹, 후임자로 암 홀딩스(Arm Holdings) CEO 르네 하스(Rene Haas)를 접촉했다는 보도가 제기됐다. 다만 기사 간에 사임 사실과 스캔들 내용이 엇갈려 정확한 사실관계는 확인되지 않은 상태다.
 
-원문 링크: https://www.bfmtv.com/tech/une-panne-majeure-touche-la-messagerie-outlook-de-microsoft-des-dizaines-de-milliers-d-utilisateurs-touches_AD-202611120992.html, https://www.americanbanker.com/news/microsoft-struggles-to-fix-outlook-copilot-hours-into-outage, https://gazzettadelsud.it/articoli/societa/2026/11/12/problemi-con-i-servizi-microsoft-nel-mondo-compreso-outlook-43c81a0a-06bb-42ca-a3a4-ec0d1ebab4bc/ 외 5건
+원문 링크: https://www.bostonglobe.com/2026/11/12/business/nvidia-ceo-resigns-heres-what-we-know/, https://www.ibtimes.co.in/jensen-huangs-third-alleged-affair-surfaces-fans-compare-ex-nvidia-ceo-aamir-khan-pawan-kalyan-908336, https://economictimes.indiatimes.com/news/international/world-news/nvidia-approached-arm-holdings-ceo-rene-haas-to-succeed-huang/articleshow/135811892.cms 외 5건
 
-### 닌텐도, 깃허브(GitHub)에서 스위치 모드칩(modchip) 펌웨어 저장소 삭제 조치
-*원문: Nintendo Gets GitHub to Remove 144 Repositories Containing Firmware for Switch Modchips*
-- 언급 3건 (그룹 내 추가 2건 생략)
+### Microsoft 서비스 장애, 70개국 이상에서 복구 진행 중
+*원문: Serviços da Microsoft estão a recuperar em várias regiões*
+- 언급 7건 (그룹 내 추가 6건 생략)
+- 🔗 반대 축에서도 다뤄짐: 전 세계 업무 마비시킨 MS 서비스 장애 36시간 만에 복구...피해 신고 74...
 
-닌텐도가 깃허브(GitHub)에 닌텐도 스위치(Nintendo Switch) 모드칩(modchip) 펌웨어를 포함한 저장소 삭제를 요청했다. 기사에 따라 삭제 대상은 144개 저장소 또는 200개 이상의 프로젝트로 언급되며, DMCA 삭제 요청이 이뤄진 것으로 전해졌다. 특정 보도에서는 'Picofly'도 관련 사안으로 거론된다.
+Microsoft가 네트워크 용량 업데이트 과정에서 문제가 발생해 전 세계 서비스가 중단되었다고 밝혔다. Outlook과 Teams 등 주요 서비스가 70개국 이상에서 영향을 받았으며, 현재 여러 지역에서 복구가 진행되고 있다. 회사 측은 이메일 등 서비스 복구 진전을 보고했다고 전했다.
 
-원문 링크: https://www.eteknix.com/nintendo-gets-github-to-remove-144-repositories-containing-firmware-for-switch-modchips/, https://kotaku.com/nintendo-github-dmca-takedowns-picofly-modchips-piracy-repositories-2000756232, https://www.heise.de/en/news/Picofly-Nintendo-has-GitHub-block-Switch-modchip-firmware-11521862.html
+원문 링크: https://recordeuropa.com/noticias/portugal/servicos-da-microsoft-estao-a-recuperar-em-varias-regioes-13-11-2026-368486, https://www.europapress.es/portaltic/internet/noticia-microsoft-relaciona-caida-servicios-problema-actualizacion-capacidad-red-20261113175846.html, https://www.haberler.com/ekonomi/microsoft-70-ten-fazla-ulkede-aksayan-hizmetlerde-20425609-haberi/ 외 4건
 
-### 젠슨 황(Jensen Huang), 엔비디아(Nvidia)를 떠나다
-*원문: Breitbart Business Digest : It a Huang - derful Life*
+### EU 정상, 더블린(Dublin)에서 인공지능(AI) 산업 진흥과 위험 논의
+*원문: قادة الاتحاد الأوروبي يبحثون في قمة دبلن تعزيز صناعة الذكاء الاصطناعي ومخاطرها*
+- 언급 2건 (그룹 내 추가 1건 생략)
+
+유럽연합(EU) 정상들이 더블린(Dublin)에서 열린 회의에서 인공지능(AI) 산업 진흥과 위험을 논의했다. AI의 기회와 위험이 의제로 올랐으나, 구체적인 합의 내용은 주어진 제목에서 확인하기 어렵다.
+
+원문 링크: https://arabic.euronews.com/2026/11/13/eu-leaders-discuss-ways-to-boost-europes-ai-industry-while-addressing-risks-at-the-dublin, https://de.euronews.com/2026/11/13/eu-staats-und-regierungschefs-beraten-in-dublin-uber-ki-chancen-und-risiken
+
+### Nuix, 신임 채널 책임자 로리 콘스메서 영입…파트너 경험 개선 및 글로벌 생태계 성장 추진
+*원문: New Nuix Channel Chief Looks To Improve Partner Experience End To End*
+- 언급 2건 (그룹 내 추가 1건 생략)
+
+Nuix가 글로벌 파트너 생태계 성장을 이끌 신임 채널 책임자로 로리 콘스메서를 영입했다. 콘스메서는 파트너 경험을 엔드 투 엔드로 개선하는 데 주력할 예정이다. 구체적인 실행 계획이나 일정 등 세부 내용은 주어진 정보에서 확인할 수 없다.
+
+원문 링크: https://www.crn.com/news/ai/2026/new-nuix-channel-chief-looks-to-improve-partner-experience-end-to-end, https://www.crn.com/news/ai/2026/nuix-hires-lori-cornmesser-to-drive-global-partner-ecosystem-growth
+
+### Google, Gemini 4 Carbon과 Gemini 4 Hydrogen 공개… AI 라인업 확대 및 모델명 혼란 가중
+*원문: Gemini 4 Carbon et Hydrogen : Google étoffe sa gamme dIA et brouille les pistes*
 - 언급 1건
 
-젠슨 황(Jensen Huang)의 엔비디아(Nvidia) 퇴진이 회사에 미칠 영향에 대한 우려가 제기되고 있다. 중국의 경우 워싱턴(Washington)에서 가장 효과적인 로비스트 중 한 명을 잃었으며, 대체자를 찾는 것이 쉽지 않을 수 있다는 분석이다. 구체적인 퇴진 배경이나 후임자 정보는 주어진 자료에서 확인하기 어렵다.
+Google이 Gemini 4 Carbon을 11월 10일부터 더 널리 배포한 데 이어 Gemini 4 Hydrogen을 새로 공개했다. 연이은 신제품 발표로 Google의 AI 모델 이름 체계를 둘러싼 사용자 혼란이 커지고 있다. 구체적인 모델별 차이점이나 향후 계획 등은 제공된 정보에서 확인하기 어렵다.
 
-원문 링크: https://www.breitbart.com/economy/2026/11/12/breibart-busiess-digest-its-a-huang-derful-life/
-
-### AI 최강자를 무너뜨린 중국 스파이 의혹
-*원문: The alleged Chinese spy that toppled AI most powerful man*
-- 언급 1건
-
-엔비디아(Nvidia) 최고경영자 젠슨 황(Jensen Huang)이 싱가포르 기반 기술 임원 앨리스 황(Alice Huang)과의 관계 의혹이 불거진 후 사임했다고 전해졌다. 미국 당국은 앨리스 황을 중국 정보 자산으로 지목했으며, 중국은 해당 의혹을 부인했다.
-
-원문 링크: https://www.abc.net.au/listen/programs/global-roaming/the-ai-honey-trap-that-brought-down-nvidia-s-chief-executive/107305662
+원문 링크: https://www.macg.co/intelligence-artificielle/2026/11/gemini-4-carbon-et-hydrogen-google-etoffe-sa-gamme-dia-et-brouille-les-pistes-312385
 
 ### 해외 - 카테고리별 Top N
 
+#### 인공지능
+
+### EU 정상, 더블린 정상회의에서 AI 산업 강화와 위험 논의
+*원문: قادة الاتحاد الأوروبي يبحثون في قمة دبلن تعزيز صناعة الذكاء الاصطناعي ومخاطرها*
+- 언급 2건 (그룹 내 추가 1건 생략)
+
+EU 정상들이 아일랜드 더블린에서 정상회의를 열고 AI 산업을 강화하는 방안과 AI의 기회 및 위험을 논의한다. 논의는 AI 기술 발전과 함께 나타날 수 있는 위험 요소를 함께 검토하는 데 초점을 맞춘다.
+
+원문 링크: https://arabic.euronews.com/2026/11/13/eu-leaders-discuss-ways-to-boost-europes-ai-industry-while-addressing-risks-at-the-dublin, https://de.euronews.com/2026/11/13/eu-staats-und-regierungschefs-beraten-in-dublin-uber-ki-chancen-und-risiken
+
 #### 기업 단위
 
-### 엔비디아(Nvidia) CEO 젠슨 황(Jensen Huang) 사임설과 후임자 후보 논쟁
-*원문: Who could replace the departed Jensen Huang as Nvidia CEO ? *
-- 언급 23건 (그룹 내 추가 22건 생략)
+### 젠슨 황(Jensen Huang) 엔비디아(Nvidia) CEO 사임 보도와 후임자 논의, 개인 스캔들 제기
+*원문: Jensen Huang resigns as Nvidia CEO : Here what we know*
+- 언급 8건 (그룹 내 추가 7건 생략)
 
-여러 해외 매체 제목들은 엔비디아(Nvidia) CEO 젠슨 황(Jensen Huang)이 스캔들과 미국 의회(US Parliament) 청문회 와중에 사임했거나 사임할 가능성이 있다고 전하며, 후임자로 애플(Apple) 전 CEO 팀 쿡(Tim Cook)이 거론된다고 주장합니다. 다만 제목들마다 사임 이유와 시점, 후임자 확정 여부가 엇갈리고 공식 발표 여부도 확인되지 않아 정확한 상황은 불분명합니다. 일부 제목은 이로 인한 기업 가치 하락과 AI 산업 전반에 미칠 파장을 경고하고 있습니다.
+여러 언어권 기사에서 젠슨 황(Jensen Huang)이 엔비디아(Nvidia) CEO에서 사임했다고 보도했으나, 사실관계는 확인되지 않았습니다. 사임 배경으로 직원과의 로맨스 스캔들이 제기되었고, 후임자로는 암(Arm Holdings) CEO 르네 하스(Rene Haas)가 거론된 것으로 전합니다. 해당 내용은 기사 제목 기반의 단편 정보이므로 신중한 확인이 필요합니다.
 
-원문 링크: https://www.aol.co.uk/articles/could-replace-departed-jensen-huang-000357000.html, https://www.theguardian.com/technology/2026/nov/12/jensen-huang-nvidia-ceo-replacement, https://www.breitbart.com/politics/2026/11/12/trump-pushes-for-nvidia-to-hire-former-apple-chief-tim-cook-to-replace-jensen-huang/ 외 20건
+원문 링크: https://www.bostonglobe.com/2026/11/12/business/nvidia-ceo-resigns-heres-what-we-know/, https://www.ibtimes.co.in/jensen-huangs-third-alleged-affair-surfaces-fans-compare-ex-nvidia-ceo-aamir-khan-pawan-kalyan-908336, https://economictimes.indiatimes.com/news/international/world-news/nvidia-approached-arm-holdings-ceo-rene-haas-to-succeed-huang/articleshow/135811892.cms 외 5건
 
 #### 반도체
 
-### 젠슨 황(Jensen Huang) 엔비디아(Nvidia) 퇴진, 중국 워싱턴(Washington) 로비 상실 우려
-*원문: Breitbart Business Digest : It a Huang - derful Life*
+### 중국(China), 엔비디아(Nvidia) 스캔들 관련 기업 칩 확보 보도에 미국(US) 반도체 수출 통제 강화 경고
+*원문: الصين تحذر واشنطن من تشديد قيود الرقائق بعد حصول شركة لأليس هوانغ على رقائق محظورة*
 - 언급 1건
 
-젠슨 황(Jensen Huang)의 엔비디아(Nvidia) 퇴진 소식이 전해지면서, 가장 큰 피해를 볼 곳은 중국(China)일 수 있다는 분석이 나옵니다. 중국은 워싱턴(Washington)에서 가장 효과적인 로비스트 중 하나를 잃었으며, 대체자를 찾기 어려울 전망입니다. 엔비디아에 미치는 영향에 대한 우려도 있지만, 중국 측의 로비력 상실이 더 큰 문제로 지적됩니다.
+중국(China)이 미국(US)에 반도체 수출 통제를 강화하지 말라고 경고했다. 이번 경고는 엔비디아(Nvidia) 스캔들 중심에 선 여성이 설립한 회사가 금지된 칩을 확보했다는 보도에 따른 것이다. 해당 갈등은 다음 주 트럼프(Trump)와 시(Xi) 주석 간 회담에 영향을 미칠 수 있으며, 미 의회(Congress)는 대중 판매 제한 강화를 압박하고 있다.
 
-원문 링크: https://www.breitbart.com/economy/2026/11/12/breibart-busiess-digest-its-a-huang-derful-life/
-
-#### 인공지능
-
-### AI 최강자를 무너뜨린 alleged Chinese spy
-*원문: The alleged Chinese spy that toppled AI most powerful man*
-- 언급 1건
-
-보도에 따르면 엔비디아(Nvidia) 최고경영자 젠슨 황(Jensen Huang)이 싱가포르 기반 기술 임원 앨리스 황(Alice Huang)과의 관계 의혹이 불거진 후 사임했다. 미국 관리들은 앨리스 황을 중국 정보 자산으로 지목했으나 중국은 의혹을 부인했다.
-
-원문 링크: https://www.abc.net.au/listen/programs/global-roaming/the-ai-honey-trap-that-brought-down-nvidia-s-chief-executive/107305662
+원문 링크: https://arabic.euronews.com/2026/11/13/china-warns-us-over-chip-restrictions-as-a-company-linked-to-a-suspected-spy-was-banned-fr
 
 #### 기타 IT 기술
 
-### Querétaro, 라틴아메리카에서 가장 빠르게 성장하는 데이터 센터 시장으로 부상
-*원문: Querétaro se convierte en el mercado de data centers de mayor crecimiento en Latinoamérica*
+### 마이크로소프트(Microsoft) 서비스 글로벌 장애, 70개국 이상에서 복구 중
+*원문: Serviços da Microsoft estão a recuperar em várias regiões*
+- 언급 7건 (그룹 내 추가 6건 생략)
+- 🔗 반대 축에서도 다뤄짐: 전 세계 업무 마비시킨 MS 서비스 장애 36시간 만에 복구...피해 신고 74...
+
+마이크로소프트(Microsoft)는 네트워크 용량 업데이트 과정에서 발생한 문제로 아웃룩(Outlook), 팀즈(Teams) 등 이메일 및 기타 서비스에 글로벌 장애가 발생했다고 밝혔다. 해당 장애는 70개국 이상에서 보고됐으며, 일부 매체는 74개국이라고 전했다. 현재 여러 지역에서 서비스 복구가 진행 중이다.
+
+원문 링크: https://recordeuropa.com/noticias/portugal/servicos-da-microsoft-estao-a-recuperar-em-varias-regioes-13-11-2026-368486, https://www.europapress.es/portaltic/internet/noticia-microsoft-relaciona-caida-servicios-problema-actualizacion-capacidad-red-20261113175846.html, https://www.haberler.com/ekonomi/microsoft-70-ten-fazla-ulkede-aksayan-hizmetlerde-20425609-haberi/ 외 4건
+
+#### 로봇공학
+
+### EIMA 2026, 바리 대학교 포도원 작업용 인간형 로봇 연구
+*원문: Eima , robot umanoidi nei campi , a Bari si studiano per lavorare nei vigneti - EIMA 2026*
 - 언급 1건
 
-멕시코 Querétaro가 라틴아메리카에서 가장 빠르게 성장하는 데이터 센터 시장으로 부상하고 있다. 디지털 경제 확장과 인공지능(AI) 발전으로 인한 기술 인프라 수요 증가에 힘입어, 멕시코는 북미(North America) 허브로서 입지를 공고히 하고 있다. 이는 전 세계적으로 기술 인프라 수요가 늘고 있는 현상과 연결된다.
+바리 대학교(Università di Bari)가 밭에서 농부를 보조할 인간형 로봇(robot umanoidi) 개발을 연구 중이다. 이 로봇은 포도원(vigneti) 등 농업 현장에서 일상 작업을 수행하는 지능형 기계로 개발될 예정이다. 해당 연구는 EIMA 2026에서 다뤄진 농업 로봇의 새로운 전선으로 소개된다.
 
-원문 링크: https://www.elfinanciero.com.mx/empresas/2026/11/12/queretaro-se-convierte-en-el-mercado-de-data-centers-de-mayor-crecimiento-en-latinoamerica/
+원문 링크: https://www.ansa.it/canale_terraegusto/notizie/fiere_eventi/speciali/eima/2026/11/12/eima-robot-umanoidi-nei-campi-a-bari-si-studiano-per-lavorare-nei_7126c5cc-4e47-42bd-bba4-d6c2af6ab092.html
